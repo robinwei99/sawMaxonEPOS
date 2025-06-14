@@ -26,128 +26,6 @@ http://www.cisst.org/cisst/license.txt.
 
 enum GALIL_STATES { ST_IDLE = 0, ST_HOMING_START, ST_HOMING_FI, ST_HOMING_WAIT, ST_HOMING_END };
 
-//****** Axis Data structures in DR packet ******
-
-#pragma pack(push, 1)     // Eliminate structure padding
-
-// AxisDataMin supported by all Galil DMC controllers
-//   - GDataRecord4000 (DMC 4000, 4200, 4103, and 500x0)
-//   - GDataRecord52000 (DMC 52000)
-//   - GDataRecord1806 (DMC 1806)
-//   - GDataRecord2103 (DMC 2103 and 2102)
-//   - GDataRecord1802 (DMC 1802)
-//   - GDataRecord30000 (DMC 30010)
-//
-// Galil User Manual states: "The velocity information that is returned in the data
-// record is 64 times larger than the value returned when using the command TV (Tell Velocity)"
-
-struct AxisDataMin {
-    uint16_t status;
-    uint8_t  switches;
-    uint8_t  stop_code;
-    int32_t  ref_pos;
-    int32_t  pos;
-    int32_t  pos_error;
-    int32_t  aux_pos;
-    int32_t  vel;
-};
-
-// For DMC 2103 and 1802, which use 16-bits for torque
-struct AxisDataOld : public AxisDataMin {
-    int16_t  torque;
-    uint16_t analog_in;   // reserved for 1802
-};
-
-// For all other DMC controllers (4000, 52000, 1806, 30000),
-// which use 32-bits for torque
-struct AxisDataNew : public AxisDataMin {
-    int32_t  torque;
-    uint16_t analog_in;
-};
-
-// AxisDataMax supported by:
-//   - GDataRecord4000 (DMC 4000, 4200, 4103, and 500x0)
-//   - GDataRecord52000 (DMC 52000)
-//   - GDataRecord30000 (DMC 30010)
-struct AxisDataMax : public AxisDataNew {
-    uint8_t  hall;        // reserved for 1806
-    uint8_t  reserved;
-    int32_t  var;         // User-defined (ZA)
-};
-
-#pragma pack(pop)
-
-// Bit masks for AxisData fields
-// For a full list, see Galil User Manual
-
-const uint16_t StatusMotorMoving     = 0x8000;
-const uint16_t StatusFindEdgeActive  = 0x1000;
-const uint16_t StatusHomeActive      = 0x0800;
-const uint16_t StatusHome1Done       = 0x0400;
-const uint16_t StatusHome2DoneFI     = 0x0200;
-const uint16_t StatusHome3Active     = 0x0002;
-const uint16_t StatusMotorOff        = 0x0001;
-
-const uint8_t  SwitchFwdLimit        = 0x08;
-const uint8_t  SwitchRevLimit        = 0x04;
-const uint8_t  SwitchHome            = 0x02;
-
-// Bit masks for Amplifier Status
-const uint32_t AmpEloUpper          = 0x02000000;  // ELO active (axes E-H)
-const uint32_t AmpEloLower          = 0x01000000;  // ELO active (axes A-D)
-const uint32_t AmpPeakCurrentA      = 0x00010000;  // Peak current for axis A (left shift for B-H)
-const uint32_t AmpHallErrorA        = 0x00000100;  // Hall error for axis A (left shift for B-h)
-const uint32_t AmpUnderVoltageUpper = 0x00000080;  // Under-voltage (axes E-H)
-const uint32_t AmpOverTempUpper     = 0x00000040;  // Over-temperature (axes E-H)
-const uint32_t AmpOverVoltageUpper  = 0x00000020;  // Over-voltage (axes E-H)
-const uint32_t AmpOverCurrentUpper  = 0x00000010;  // Over-current (axes E-H)
-const uint32_t AmpUnderVoltageLower = 0x00000008;  // Under-voltage (axes A-D)
-const uint32_t AmpOverTempLower     = 0x00000004;  // Over-temperature (axes A-D)
-const uint32_t AmpOverVoltageLower  = 0x00000002;  // Over-voltage (axes A-D)
-const uint32_t AmpOverCurrentLower  = 0x00000001;  // Over-current (axes A-D)
-
-// Stop codes (see SC command for full list)
-const uint8_t SC_Running  =  0;   // Motors are running
-const uint8_t SC_Stopped  =  1;   // Motors decelerating or stopped at position
-const uint8_t SC_FwdLim   =  2;   // Stopped at forward limit switch (or FL)
-const uint8_t SC_RevLim   =  3;   // Stopped at reverse limit switch (or BL)
-const uint8_t SC_StopCmd  =  4;   // Stopped by Stop command (ST)
-const uint8_t SC_OnError  =  8;   // Stopped by Off on Error (OE)
-const uint8_t SC_FindEdge =  9;   // Stopped after finding edge (FE)
-const uint8_t SC_Homing   = 10;   // Stopped after homing (HM) or find index (FI)
-
-// Following is information specific to the different Galil DMC controller models.
-// There currently are 6 different DMC model types. We do not support any RIO controllers.
-// Note also the Galil QZ command, which returns information about the DR structure.
-const size_t NUM_MODELS = 6;
-const size_t ADold = sizeof(AxisDataOld);
-const size_t ADnew = sizeof(AxisDataNew);
-const size_t ADmax = sizeof(AxisDataMax);
-// The Galil model types (corresponding to the different GDataRecord structs)
-const unsigned int ModelTypes[NUM_MODELS]     = {  4000, 52000,  1806,  2103,  1802, 30000 };
-// Byte offset to the start of the axis data
-const unsigned int AxisDataOffset[NUM_MODELS] = {    82,    82,    78 ,   44,    40,    38 };
-// Size of the axis data
-const size_t AxisDataSize[NUM_MODELS]         = { ADmax, ADmax, ADnew, ADold, ADold, ADmax };
-// Whether the first 4 bytes contain header information
-// For DMC-4143, the header bytes are: 135 (0x87), 15 (0x0f), 226 , 0
-//   0x87 MSB always set; 7 indicates that I (Input), T (T Plane) and S (S Plane) blocks present
-//   0x0f indicates that blocks (axes) A-D are present, but not E-H
-//   last two bytes (swapped) are the size of the data record (226 bytes for DMC-4143)
-const bool HasHeader[NUM_MODELS]              = {  true,  true, false,  true, false,  true };
-// Byte offset to the sample number
-const unsigned int SampleOffset[NUM_MODELS]   = {     4,     4,     0,     4,     0,     4 };
-// Byte offset to the error code
-const unsigned int ErrorCodeOffset[NUM_MODELS] = {   50,    50,    46,    26,    22,    10 };
-// Byte offset to amplifier status (-1 means not available)
-const int AmpStatusOffset[NUM_MODELS]          = {   52,    52,    -1,    -1,    -1,    18 };
-// Whether controller supports the LD (limit disable) command
-const bool _HasLimitDisable[NUM_MODELS]        = { true, true, true, false, false, true };
-// Whether controller supports the ZA (user data) command
-const bool _HasUserDataZA[NUM_MODELS]          = { true, true, true, false, false, true };
-// Whether controller supports the HV (homing velocity) command
-const bool _HasHomingVelocity[NUM_MODELS]      = { true, true, true, false, false, true };
-
 CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsGalilController, mtsTaskContinuous, mtsTaskContinuousConstructorArg);
 
 mtsGalilController::mtsGalilController(const std::string &name) :
@@ -264,21 +142,6 @@ void mtsGalilController::SetupInterfaces(void)
 
         }
     }
-
-    for (i = 0; i < mAnalogInputs.size(); i++) {
-        // TODO: set unique name for state table element
-        StateTable.AddData(mAnalogInputs[i].values, "values");
-        mtsInterfaceProvided *prov = AddInterfaceProvided(m_configuration.analog_inputs[i].name);
-        mAnalogInputs[i].mInterface = prov;
-        if (prov) {
-            // for Status, Warning and Error with mtsMessage
-            prov->AddMessageEvents();
-
-            prov->AddCommandRead(&mtsGalilController::GetConnected, this, "GetConnected");
-            prov->AddCommandReadState(this->StateTable, mAnalogInputs[i].values,
-                                      m_configuration.analog_inputs[i].command_name);
-        }
-    }
 }
 
 void mtsGalilController::Close()
@@ -288,17 +151,6 @@ void mtsGalilController::Close()
         GClose(mGalil);
         mGalil = 0;
     }
-}
-
-unsigned int mtsGalilController::GetModelIndex(unsigned int modelType)
-{
-    unsigned int i;
-    for (i = 0; i < NUM_MODELS; i++) {
-        if (modelType == ModelTypes[i]) {
-            break;
-        }
-    }
-    return i;
 }
 
 void mtsGalilController::Configure(const std::string& fileName)
