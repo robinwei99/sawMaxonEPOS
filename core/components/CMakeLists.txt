@@ -10,7 +10,7 @@
 # --- end cisst license ---
 
 cmake_minimum_required (VERSION 3.10)
-project (sawGalilController VERSION 0.1.0)
+project (sawMaxonController VERSION 0.1.0)
 
 # So we can use Findgclib.cmake
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -31,85 +31,78 @@ if (cisst_FOUND_AS_REQUIRED)
   include (${CISST_USE_FILE})
 
   if (NOT CISST_HAS_JSON)
-    message( FATAL_ERROR "sawGalilController requires cisst to be built with JSON" )
+    message( FATAL_ERROR "sawMaxonController requires cisst to be built with JSON" )
   endif ()
 
   # catkin/ROS paths
   cisst_set_output_path ()
 
 
-  # Find Galil gclib but don't fail if not found
-  find_package (gclib)
+  # Find maxon EposCmdLib but don't fail if not found
+  find_package (EposCmdLib)
 
-  if (gclib_FOUND)
+  if (EposCmdLib_FOUND)
 
-    include_directories (${gclib_INCLUDE_DIR})
-    link_directories (${gclib_LIBRARY_DIR})
+    include_directories (${EposCmdLib_INCLUDE_DIR})
+    link_directories (${EposCmdLib_LIBRARY_DIR})
 
-    set (sawGalilController_INCLUDE_DIR
-      "${sawGalilController_SOURCE_DIR}/include"
-      "${sawGalilController_BINARY_DIR}/include")
-    set (sawGalilController_HEADER_DIR "${sawGalilController_SOURCE_DIR}/include/sawGalilController")
-    set (sawGalilController_LIBRARY_DIR "${LIBRARY_OUTPUT_PATH}" "${gclib_LIBRARY_DIR}")
-    set (sawGalilController_LIBRARIES sawGalilController)
+    set (sawMaxonController_INCLUDE_DIR
+      "${sawMaxonController_SOURCE_DIR}/include"
+      "${sawMaxonController_BINARY_DIR}/include")
+    set (sawMaxonController_HEADER_DIR "${sawMaxonController_SOURCE_DIR}/include/sawMaxonController")
+    set (sawMaxonController_LIBRARY_DIR "${LIBRARY_OUTPUT_PATH}" "${EposCmdLib_LIBRARY_DIR}")
+    set (sawMaxonController_LIBRARIES sawMaxonController)
 
-    include_directories (BEFORE ${sawGalilController_INCLUDE_DIR})
+    include_directories (BEFORE ${sawMaxonController_INCLUDE_DIR})
 
     # add all config files for this component
-    cisst_add_config_files (sawGalilController)
+    cisst_add_config_files (sawMaxonController)
 
-    # create data type using the data generator
-    cisst_data_generator (sawGalilController
-      "${sawGalilController_BINARY_DIR}/include"
-      "sawGalilController/"
-      code/sawGalilControllerConfig.cdg)
+    set (sawMaxonController_HEADER_FILES
+      "${sawMaxonController_HEADER_DIR}/mtsMaxonController.h"
+      "${sawMaxonController_HEADER_DIR}/sawMaxonControllerExport.h"
+      ${sawMaxonController_CISST_DG_HDRS})
 
-    set (sawGalilController_HEADER_FILES
-      "${sawGalilController_HEADER_DIR}/mtsGalilController.h"
-      "${sawGalilController_HEADER_DIR}/sawGalilControllerExport.h"
-      ${sawGalilController_CISST_DG_HDRS})
-
-    set (sawGalilController_SOURCE_FILES
-      code/mtsGalilController.cpp
-      ${sawGalilController_CISST_DG_SRCS})
+    set (sawMaxonController_SOURCE_FILES
+      code/mtsMaxonController.cpp)
 
     add_library (
-      sawGalilController
+      sawMaxonController
       ${IS_SHARED}
-      ${sawGalilController_HEADER_FILES}
-      ${sawGalilController_SOURCE_FILES})
+      ${sawMaxonController_HEADER_FILES}
+      ${sawMaxonController_SOURCE_FILES})
 
     set_target_properties (
-      sawGalilController PROPERTIES
-      VERSION ${sawGalilController_VERSION}
-      FOLDER "sawGalilController")
+      sawMaxonController PROPERTIES
+      VERSION ${sawMaxonController_VERSION}
+      FOLDER "sawMaxonController")
 
     target_link_libraries (
-      sawGalilController
+      sawMaxonController
       ${gclib_LIBRARIES})
 
     cisst_target_link_libraries (
-      sawGalilController
+      sawMaxonController
       ${REQUIRED_CISST_LIBRARIES})
 
     # Install target for headers and library
     install (
       DIRECTORY
-      "${sawGalilController_SOURCE_DIR}/include/sawGalilController"
-      "${sawGalilController_BINARY_DIR}/include/sawGalilController"
+      "${sawMaxonController_SOURCE_DIR}/include/sawMaxonController"
+      "${sawMaxonController_BINARY_DIR}/include/sawMaxonController"
       DESTINATION include
-      COMPONENT sawGalilController-dev)
+      COMPONENT sawMaxonController-dev)
 
     install (
-      TARGETS sawGalilController
-      COMPONENT sawGalilController
+      TARGETS sawMaxonController
+      COMPONENT sawMaxonController
       RUNTIME DESTINATION bin
       LIBRARY DESTINATION lib
       ARCHIVE DESTINATION lib)
 
-  else (gclib_FOUND)
-    message ("Information: code in ${CMAKE_CURRENT_SOURCE_DIR} will not be compiled, it requires the Galil SDK")
-  endif (gclib_FOUND)
+  else (EposCmdLib_FOUND)
+    message ("Information: code in ${CMAKE_CURRENT_SOURCE_DIR} will not be compiled, it requires the Maxon SDK")
+  endif (EposCmdLib_FOUND)
 else (cisst_FOUND_AS_REQUIRED)
     message ("Information: code in ${CMAKE_CURRENT_SOURCE_DIR} will not be compiled, it requires ${REQUIRED_CISST_LIBRARIES}")
 endif (cisst_FOUND_AS_REQUIRED)

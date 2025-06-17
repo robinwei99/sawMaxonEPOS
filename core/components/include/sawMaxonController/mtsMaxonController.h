@@ -112,9 +112,6 @@ protected:
         // Hold joint at current position (Stop)
         void hold(void);
 
-        // Set operating state
-        void state_command(const std::string &command);
-
         // Enable motor power
         void EnableMotorPower(void);
         // Disable motor power

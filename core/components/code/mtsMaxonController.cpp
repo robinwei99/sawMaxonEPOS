@@ -159,12 +159,6 @@ void mtsGalilController::Configure(const std::string& fileName)
 
 void mtsMaxonController::Startup()//const std::string & fileName
 {
-    // mConfigPath.Set(cmnPath::GetWorkingDirectory());
-    // std::string fullname = mConfigPath.Find(fileName);
-    // if (fullname.empty()) {
-    //     CMN_LOG_CLASS_INIT_ERROR << "Configure: file " << fileName << " not found\n";
-    //     return;
-    // }
 
     for (unsigned int i = 0; i < mRobots.size(); i++) {
         // Zero Error Code
@@ -300,84 +294,137 @@ void mtsMaxonController::Close()
     }
 }
 
+// Fixed
 void mtsMaxonController::RobotData::EnableMotorPower(void)
 {
-    if (!mParent || !mParent->mEposHandle) return;
-    DWORD errorCode = 0;
-    try {
-        BOOL isFault = 0;
-        if (!VCS_GetFaultState(mParent->mEposHandle, mNodeId, &isFault, &errorCode)) {
-            throw std::runtime_error("VCS_GetFaultState failed");
-        }
-        if (isFault) {
-            if (!VCS_ClearFault(mParent->mEposHandle, mNodeId, &errorCode)) {
-                throw std::runtime_error("VCS_ClearFault failed");
-            }
-        }
-        BOOL isEnabled = 0;
-        if (!VCS_GetEnableState(mParent->mEposHandle, mNodeId, &isEnabled, &errorCode)) {
-            throw std::runtime_error("VCS_GetEnableState failed");
-        }
-        if (!isEnabled) {
-            if (!VCS_SetEnableState(mParent->mEposHandle, mNodeId, &errorCode)) {
-                throw std::runtime_error("VCS_SetEnableState failed");
-            }
-        }
+    if (!mParent || !mParent->mEposHandle) {
+        return;
     }
-    catch (const std::runtime_error &e) {
-        mHadError = true;
+
+    mErrorCode = 0;
+    try {
+
+        for (size_t axis = 0; axis < mNumAxes; ++axis) {
+            bool   isFault = false, 
+            bool isEnabled = false;
+
+            // 2.1) Clear fault
+            if (!VCS_GetFaultState(mHandles[axis], mAxisToNodeIDMap[axis], &isFault, &mErrorCode)) {
+                throw std::runtime_error(
+                    "Axis " + std::to_string(axis) +
+                    " GetFaultState failed (err=" + std::to_string(mErrorCode) + ")"
+                );
+            }
+            if (isFault) {
+                if (!VCS_ClearFault(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
+                    throw std::runtime_error(
+                        "Axis " + std::to_string(axis) +
+                        " ClearFault failed (err=" + std::to_string(mErrorCode) + ")"
+                    );
+                }
+            }
+
+            // 2.2) Enable power
+            if (!VCS_GetEnableState(mHandles[axis], mAxisToNodeIDMap[axis], &isEnabled, &mErrorCode)) {
+                throw std::runtime_error(
+                    "Axis " + std::to_string(axis) +
+                    " GetEnableState failed (err=" + std::to_string(mErrorCode) + ")"
+                );
+            }
+            if (!isEnabled) {
+                if (!VCS_SetEnableState(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
+                    throw std::runtime_error(
+                        "Axis " + std::to_string(axis) +
+                        " SetEnableState failed (err=" + std::to_string(mErrorCode) + ")"
+                    );
+                }
+            }
+        }
+
+        mActuatorState.MotorOff().SetAll(false);
+    }
+    catch (const std::runtime_error & e) {
         mInterface->SendError(name + ": EnableMotorPower (" + e.what() + ")");
     }
 }
 
+// Fixed
 void mtsMaxonController::RobotData::DisableMotorPower(void)
 {
-    if (!mParent || !mParent->mEposHandle) return;
-    DWORD errorCode = 0;
-    try {
-        if (mMotionActive) {
-            VCS_HaltPositionMovement(mParent->mEposHandle, mNodeId, &errorCode);
-            osaSleep(0.05);
-        }
-        if (!VCS_SetDisableState(mParent->mEposHandle, mNodeId, &errorCode)) {
-            throw std::runtime_error("VCS_SetDisableState failed");
-        }
-        mMotionActive = false;
+    if (!mParent || !mParent->mEposHandle) {
+        return;
     }
-    catch (const std::runtime_error &e) {
+
+    mErrorCode = 0;
+    try {
+        for (size_t axis = 0; axis < mNumAxes; ++axis) {
+
+            // 2.1) 查询当前使能状态
+            if (!VCS_GetEnableState(mHandles[axis], mAxisToNodeIDMap[axis], &mMotorPowerOn, &mErrorCode)) {
+                throw std::runtime_error(
+                    "Axis " + std::to_string(axis) +
+                    " GetEnableState failed (err=" + std::to_string(mErrorCode) + ")"
+                );
+            }
+            // 2.2) 若已使能则调用 Disable
+            if (mMotorPowerOn) {
+                if (!VCS_SetDisableState(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
+                    throw std::runtime_error(
+                        "Axis " + std::to_string(axis) +
+                        " SetDisableState failed (err=" + std::to_string(mErrorCode) + ")"
+                    );
+                }
+            }
+        }
+
+        mActuatorState.MotorOff().SetAll(true);
+    }
+    catch (const std::runtime_error & e) {
+        // 4) 捕获并上报
         mHadError = true;
         mInterface->SendError(name + ": DisableMotorPower (" + e.what() + ")");
     }
 }
 
-void mtsMaxonController::RobotData::servo_jv(const prmVelocityJointSet &jtvel)
+// VM
+void mtsMaxonController::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
 {
-    if (!CheckStateEnabled("servo_jv")) return;
     if (!mParent || !mParent->mEposHandle) return;
-    DWORD errorCode = 0;
+
+    mErrorCode = 0;
+
     try {
-        long velocityMust = static_cast<long>(jtvel.Goal());
-        if (!VCS_ActivateProfileVelocityMode(mParent->mEposHandle, mNodeId, &errorCode)) {
-            throw std::runtime_error("VCS_ActivateProfileVelocityMode failed");
+        for (size_t axis = 0; axis < mNumAxes; ++axis) {
+            if (mActuatorState.MotorOff()[axis]) {
+                continue;
+            }
+
+            // 2.1) Active Velocity Mode.
+            if (mState[axis] != ST_VM) {
+                if (!VCS_ActivateVelocityMode(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
+                    throw std::runtime_error(
+                        "Axis " + std::to_string(axis) +
+                        " ActivateVelocityMode failed (err=" +
+                        std::to_string(mErrorCode) + ")"
+                    );
+                }
+                mState[axis] = ST_VM;
+            }
+
+            // 2.2) Velocity set‐point
+            if (!VCS_SetVelocityMust(mHandles[axis], mAxisToNodeIDMap[axis], jtvel.Goal()[axis], &mErrorCode)) {
+                throw std::runtime_error(
+                    "Axis " + std::to_string(axis) +
+                    " SetVelocityMust failed (err=" +
+                    std::to_string(mErrorCode) + ")"
+                );
+            }
         }
-        if (!VCS_SetVelocityMust(mParent->mEposHandle, mNodeId, velocityMust, &errorCode)) {
-            throw std::runtime_error("VCS_SetVelocityMust failed");
-        }
-        if (!VCS_MoveWithVelocity(mParent->mEposHandle, mNodeId, velocityMust, &errorCode)) {
-            throw std::runtime_error("VCS_MoveWithVelocity failed");
-        }
-        mMotionActive = true;
+
     }
-    catch (const std::runtime_error &e) {
-        mHadError = true;
+    catch (const std::runtime_error & e) {
         mInterface->SendError(name + ": servo_jv (" + e.what() + ")");
     }
-}
-
-// Fixed
-void mtsMaxonController::RobotData::hold(void)
-{
-    stop_if_acive("hold");
 }
 
 // PM
@@ -427,7 +474,7 @@ void mtsMaxonController::RobotData::move_jp(const prmPositionJointSet & jtpos)
     mErrorCode = 0;
     try {
         // Stop moving
-        stop_if_active("move_jp");
+        hold();
 
         for (size_t axis = 0; axis < mNumAxes; ++axis) {
             
@@ -465,7 +512,7 @@ void mtsMaxonController::RobotData::move_jp(const prmPositionJointSet & jtpos)
 }
 
 // Fixed
-void mtsMaxonController::RobotData::stop_if_active(const char *cmd)
+void mtsMaxonController::RobotData::hold(void)
 {
     // Return if all stop
     if (!mActuatorState.InMotion().Any()) {
@@ -480,7 +527,7 @@ void mtsMaxonController::RobotData::stop_if_active(const char *cmd)
             case ST_PVM:
                 // Velocity mode
                 if (!VCS_HaltVelocityMovement(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
-                    mInterface->SendWarning(name + ": " + cmd +
+                    mInterface->SendWarning(name + ": " +
                         " axis " + std::to_string(axis) +
                         " HaltVelocityMovement failed (err=" + std::to_string(mErrorCode) + ")");
                 }
@@ -489,7 +536,7 @@ void mtsMaxonController::RobotData::stop_if_active(const char *cmd)
             default:
                 // All other mode
                 if (!VCS_HaltPositionMovement(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
-                    mInterface->SendWarning(name + ": " + cmd +
+                    mInterface->SendWarning(name + ": " +
                         " axis " + std::to_string(axis) +
                         " HaltPositionMovement(default) failed (err=" + std::to_string(mErrorCode) + ")");
                 }
@@ -501,53 +548,90 @@ void mtsMaxonController::RobotData::stop_if_active(const char *cmd)
     mActuatorState.InMotion().SetAll(false);
 }
 
-void mtsMaxonController::RobotData::SetSpeed(const vctDoubleVec &spd)
+void mtsMaxonController::RobotData::SetSpeed(const vctDoubleVec & spd)
 {
-    if (!mParent || !mParent->mEposHandle) return;
-    DWORD errorCode = 0;
-    try {
-        long speedMust = static_cast<long>(spd[0]);
-        if (!VCS_SetVelocityMust(mParent->mEposHandle, mNodeId, speedMust, &errorCode)) {
-            throw std::runtime_error("VCS_SetVelocityMust failed");
-        }
-        mSpeed = spd;
+    // 1) 检查父对象和总线句柄
+    if (!mParent || !mParent->mEposHandle) {
+        return;
     }
-    catch (const std::runtime_error &e) {
-        mHadError = true;
+
+    mErrorCode = 0;
+
+    try {
+
+        for (size_t axis = 0; axis < mNumAxes; ++axis) {
+            if (mActuatorState.MotorOff()[axis]) {
+                continue;
+            }
+            if (!VCS_SetVelocityMust(mHandles[axis], mAxisToNodeIDMap[axis], spd[axis], &mErrorCode)) {
+                throw std::runtime_error(
+                    "Axis " + std::to_string(axis) +
+                    " SetVelocityMust failed (err=" + std::to_string(mErrorCode) + ")"
+                );
+            }
+        }
+
+    }
+    catch (const std::runtime_error & e) {
         mInterface->SendError(name + ": SetSpeed (" + e.what() + ")");
     }
 }
 
-void mtsMaxonController::RobotData::SetAccel(const vctDoubleVec &accel)
+void mtsMaxonController::RobotData::SetAccel(const vctDoubleVec & accel)
 {
+    // 1) 参数检查
     if (!mParent || !mParent->mEposHandle) return;
-    DWORD errorCode = 0;
+
+    // 2) 准备错误码
+    mErrorCode = 0;
+
     try {
-        long accelMust = static_cast<long>(accel[0]);
-        if (!VCS_SetMaxAcceleration(mParent->mEposHandle, mNodeId, accelMust, &errorCode)) {
-            throw std::runtime_error("VCS_SetMaxAcceleration failed");
+        // 3) 多轴循环，分别设置最大加速度
+        for (size_t axis = 0; axis < mNumAxes; ++axis) {
+            // 跳过已断电的轴
+            if (mActuatorState.MotorOff()[axis]) {
+                continue;
+            }
+
+            if (!VCS_SetMaxAcceleration(mHandles[axis], mAxisToNodeIDMap[axis], accel[axis], &mErrorCode)) {
+                throw std::runtime_error(
+                    "Axis " + std::to_string(axis) +
+                    " SetMaxAcceleration failed (err=" +
+                    std::to_string(mErrorCode) + ")"
+                );
+            }
         }
-        mAccel = accel;
     }
-    catch (const std::runtime_error &e) {
-        mHadError = true;
+    catch (const std::runtime_error & e) {
         mInterface->SendError(name + ": SetAccel (" + e.what() + ")");
     }
 }
 
-void mtsMaxonController::RobotData::SetDecel(const vctDoubleVec &decel)
+void mtsMaxonController::RobotData::SetDecel(const vctDoubleVec & decel)
 {
+    // 1) 参数检查
     if (!mParent || !mParent->mEposHandle) return;
-    DWORD errorCode = 0;
+
+    // 2) 准备错误码
+    mErrorCode = 0;
+
     try {
-        long decelMust = static_cast<long>(decel[0]);
-        if (!VCS_SetMaxDeceleration(mParent->mEposHandle, mNodeId, decelMust, &errorCode)) {
-            throw std::runtime_error("VCS_SetMaxDeceleration failed");
+        // 3) 多轴循环，分别设置最大减速度
+        for (size_t axis = 0; axis < mNumAxes; ++axis) {
+            // 跳过已断电的轴
+            if (mActuatorState.MotorOff()[axis]) {
+                continue;
+            }
+            if (!VCS_SetMaxDeceleration(mHandles[axis], mAxisToNodeIDMap[axis], decel[axis], &mErrorCode)) {
+                throw std::runtime_error(
+                    "Axis " + std::to_string(axis) +
+                    " SetMaxDeceleration failed (err=" +
+                    std::to_string(mErrorCode) + ")"
+                );
+            }
         }
-        mDecel = decel;
     }
-    catch (const std::runtime_error &e) {
-        mHadError = true;
+    catch (const std::runtime_error & e) {
         mInterface->SendError(name + ": SetDecel (" + e.what() + ")");
     }
 }

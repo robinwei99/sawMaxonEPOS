@@ -1,8 +1,8 @@
 <package>
-  <name>saw_galil_controller</name>
+  <name>saw_maxon_controller</name>
   <version>0.0.1</version>
-  <description>sawGalilController</description>
-  <maintainer email="pkaz@jhu.edu">Peter Kazanzides</maintainer>
+  <description>sawMaxonController</description>
+  <maintainer email="hwei15@jhu.edu">Haochen Wei</maintainer>
   <license>cisst</license>
   <url>https://github.com/jhu-saw/sawGalilController</url>
 
