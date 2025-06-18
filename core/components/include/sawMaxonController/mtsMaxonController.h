@@ -44,6 +44,7 @@ class CISST_EXPORT mtsMaxonController : public mtsTaskContinuous
 
     mtsMaxonController(const std::string &name);
     mtsMaxonController(const std::string &name, unsigned int sizeStateTable, bool newThread = true);
+    mtsMaxonController(const mtsTaskContinuousConstructorArg &arg);
 
     ~mtsMaxonController();
 
@@ -82,9 +83,9 @@ protected:
 
         prmActuatorState mActuatorState;        // Actuator state
 
-        vctUIntVec    mAxisToNoidIDMap;         // Map from axis number to nodeID
+        vctUIntVec    mAxisToNodeIDMap;         // Map from axis number to nodeID
 
-        bool          mMotorPowerOn;            // Whether motor power is on (for all configured motors)
+        int           mMotorPowerOn;            // Whether motor power is on (for all configured motors)
         bool          mMotionActive;            // Whether a motion is active
         vctUIntVec    mState;                   // Internal axis state machine
         
@@ -120,11 +121,7 @@ protected:
         // Set this point as home.
         void SetHome(void);
 
-        // Set speed, acceleration and deceleration
-        void SetSpeed(const vctDoubleVec &spd);
-        void SetAccel(const vctDoubleVec &accel);
-        void SetDecel(const vctDoubleVec &decel);
-
+        void SetPositionProfile(const vctDoubleVec & profileVelocity, const vctDoubleVec & profileAcceleration, const vctDoubleVec & profileDeceleration);
     };
     std::vector<RobotData> mRobots;
 

@@ -7,7 +7,7 @@ This software is provided "as is" under an open source license, with no warranty
 --- end cisst license ---
 */
 
-#include "EposCmd.h"  // EPOS Command Library
+#include "Definitions.h"  // EPOS Command Library
 #include <cisstCommon/cmnPath.h>
 #include <cisstCommon/cmnAssert.h>
 #include <cisstOSAbstraction/osaSleep.h>
@@ -24,17 +24,22 @@ enum OP_STATES { ST_PPM, ST_PVM, ST_PM, ST_VM, ST_CM, ST_HM, ST_MEM, ST_SDM, ST_
 CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsMaxonController, mtsTaskContinuous, mtsTaskContinuousConstructorArg);
 
 mtsMaxonController::mtsMaxonController(const std::string &name) :
-    mtsTaskContinuous(name, 1024, true),
+    mtsTaskContinuous(name, 1024, true)
 {}
 
 mtsMaxonController::mtsMaxonController(const std::string &name, unsigned int sizeStateTable, bool newThread) :
-    mtsTaskContinuous(name, 1024, true),
+    mtsTaskContinuous(name, sizeStateTable, newThread)
+{}
+
+mtsMaxonController::mtsMaxonController(const mtsTaskContinuousConstructorArg & arg) :
+    mtsTaskContinuous(arg)
 {}
 
 mtsMaxonController::~mtsMaxonController()
 {
     Close();
 }
+
 
 void mtsMaxonController::SetupInterfaces(void)
 {
@@ -54,22 +59,21 @@ void mtsMaxonController::SetupInterfaces(void)
 
             prov->AddCommandWrite(&mtsMaxonController::RobotData::servo_jp, &mRobots[i], "servo_jp");
             prov->AddCommandWrite(&mtsMaxonController::RobotData::move_jp,  &mRobots[i], "move_jp");
-
             prov->AddCommandWrite(&mtsMaxonController::RobotData::servo_jv, &mRobots[i], "servo_jv");
-            prov->AddCommandWrite(&mtsMaxonController::RobotData::hold,     &mRobots[i], "hold");
 
-            prov->AddCommandWrite(&mtsMaxonController::RobotData::EnableMotorPower,  &mRobots[i], "EnableMotorPower");
-            prov->AddCommandWrite(&mtsMaxonController::RobotData::DisableMotorPower, &mRobots[i], "DisableMotorPower");
+            prov->AddCommandVoid(&mtsMaxonController::RobotData::hold,     &mRobots[i], "hold");
+            prov->AddCommandVoid(&mtsMaxonController::RobotData::EnableMotorPower,  &mRobots[i], "EnableMotorPower");
+            prov->AddCommandVoid(&mtsMaxonController::RobotData::DisableMotorPower, &mRobots[i], "DisableMotorPower");
 
 
-            prov->AddCommandReadState(this->StateTable, mRobots[i].mSpeed, "GetSpeed");
-            prov->AddCommandReadState(this->StateTable, mRobots[i].mAccel, "GetAccel");
-            prov->AddCommandReadState(this->StateTable, mRobots[i].mDecel, "GetDecel");
+            // prov->AddCommandReadState(this->StateTable, mRobots[i].mSpeed, "GetSpeed");
+            // prov->AddCommandReadState(this->StateTable, mRobots[i].mAccel, "GetAccel");
+            // prov->AddCommandReadState(this->StateTable, mRobots[i].mDecel, "GetDecel");
         }
     }
 }
 
-void mtsGalilController::Configure(const std::string& fileName)
+void mtsMaxonController::Configure(const std::string& fileName)
 {
     mConfigPath.Set(cmnPath::GetWorkingDirectory());
     std::string fullname = mConfigPath.Find(fileName);
@@ -106,12 +110,12 @@ void mtsGalilController::Configure(const std::string& fileName)
     // Process the robot configuration data
     mRobots.resize(jsonConfig["robots"].size());
     for (unsigned int i = 0; i < jsonConfig["robots"].size(); i++) {
-        mRobots[i].name = jsonConfig["robots"][i][name].asString();
-        mRobots[i].deviceName = jsonConfig["robots"][i][device_name].asString();
-        mRobots[i].protocolStackName = jsonConfig["robots"][i][protocol_stack_name].asString();
-        mRobots[i].interfaceName = jsonConfig["robots"][i][interface_name].asString();
-        mRobots[i].portName = jsonConfig["robots"][i][port_name].asString();
-        mRobots[i].mTimeout = jsonConfig["robots"][i][timeout].asUInt();
+        mRobots[i].name = jsonConfig["robots"][i]["name"].asString();
+        mRobots[i].deviceName = jsonConfig["robots"][i]["device_name"].asString();
+        mRobots[i].protocolStackName = jsonConfig["robots"][i]["protocol_stack_name"].asString();
+        mRobots[i].interfaceName = jsonConfig["robots"][i]["interface_name"].asString();
+        mRobots[i].portName = jsonConfig["robots"][i]["port_name"].asString();
+        mRobots[i].mTimeout = jsonConfig["robots"][i]["timeout"].asUInt();
 
         mRobots[i].mParent = this;
         // Size of array determines number of axes
@@ -142,7 +146,7 @@ void mtsGalilController::Configure(const std::string& fileName)
         mRobots[i].mState.SetSize(numAxes);
         mRobots[i].mState.SetAll(ST_PPM);
 
-        mHandles.resize(numAxes);
+        mRobots[i].mHandles.resize(numAxes);
         for (unsigned int axis = 0; axis < numAxes; axis++){
             mRobots[i].mAxisToNodeIDMap[axis] = jsonConfig["robots"][i]["axes"][axis]["nodeid"].asInt();
             // mRobots[i].mCalibrationFile.push_back(jsonConfig["robots"][i]["axes"][axis]["calibration_file"].asString(););
@@ -164,35 +168,35 @@ void mtsMaxonController::Startup()//const std::string & fileName
         // Zero Error Code
         mRobots[i].mErrorCode = 0;
         
-        mRobots[i].mHandle[0] = VCS_OpenDevice(const_cast<char*>(mRobots[i].deviceName.c_str()),
+        mRobots[i].mHandles[0] = VCS_OpenDevice(const_cast<char*>(mRobots[i].deviceName.c_str()),
                                  const_cast<char*>(mRobots[i].protocolStackName.c_str()),
                                  const_cast<char*>(mRobots[i].interfaceName.c_str()),
                                  const_cast<char*>(mRobots[i].portName.c_str()),
                                  &mRobots[i].mErrorCode);
-        if (mRobots[i].mHandle[0] == nullptr || mRobots[i].mErrorCode != 0){
+        if (mRobots[i].mHandles[0] == nullptr || mRobots[i].mErrorCode != 0){
             for (unsigned int j = 1; j < mRobots[i].mNumAxes; j++){
-                mRobots[i].mHandle[j] = VCS_OpenSubDevice(mRobots[i].mHandle[0],
+                mRobots[i].mHandles[j] = VCS_OpenSubDevice(mRobots[i].mHandles[0],
                                  const_cast<char*>(mRobots[i].deviceName.c_str()),
                                  const_cast<char*>("CANopen"),
-                                 &mRobots[i].mErrorCode)
-                if(mRobots[i].mHandle[j]==0){
+                                 &mRobots[i].mErrorCode);
+                if(mRobots[i].mHandles[j]==0){
                     CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_OpenSubDevice " << j << " failed (errorCode = " << mRobots[i].mErrorCode << ")" << std::endl;
                     exit(EXIT_FAILURE);
                 }
             }
         }
-        else(
+        else{
             CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_OpenDevice failed (errorCode = " << mRobots[i].mErrorCode << ")" << std::endl;
             exit(EXIT_FAILURE);
-        )
-        
-        unsigned int* oldTImeout;
-        if (!VCS_GetProtocolStackSettings(mRobots[i].mHandle[0], &mRobots[i].baudrate, oldTImeout, &mRobots[i].mErrorCode)) {
+        }
+
+        unsigned int oldTimeout;
+        if (!VCS_GetProtocolStackSettings(mRobots[i].mHandles[0], &mRobots[i].baudrate, &oldTimeout, &mRobots[i].mErrorCode)) {
             CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_GetProtocolStackSettings failed (errorCode = "
                                     << mRobots[i].mErrorCode << ")\n";
             exit(EXIT_FAILURE);
         }
-        if (!VCS_SetProtocolStackSettings(mRobots[i].mHandle[0], mRobots[i].baudrate, mRobots[i].mTimeout, &mRobots[i].mErrorCode)) {
+        if (!VCS_SetProtocolStackSettings(mRobots[i].mHandles[0], mRobots[i].baudrate, mRobots[i].mTimeout, &mRobots[i].mErrorCode)) {
             CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_SetProtocolStackSettings failed (errorCode = "
                                     << mRobots[i].mErrorCode << ")\n";
             exit(EXIT_FAILURE);
@@ -205,12 +209,12 @@ void mtsMaxonController::Startup()//const std::string & fileName
 void mtsMaxonController::Run()
 {
     for (size_t i = 0; i < mRobots.size(); ++i) {
-        // 假设第一个轴 handle 是 USB 直连，后面所有都是通过 CANopen 网关
+        // First axis USB, rest of the axis are CAN
         for (size_t axis = 0; axis < mRobots[i].mNumAxes; ++axis) {
             // Zero errorCode
             mRobots[i].mErrorCode = 0;
 
-            bool isFault = false;
+            int isFault = false;
             if (VCS_GetFaultState(mRobots[i].mHandles[axis],  mRobots[i].mAxisToNodeIDMap[axis], &isFault,  &mRobots[i].mErrorCode)) {
                 if(isFault){
                     mRobots[i].mActuatorState.MotorOff()[axis] = false;
@@ -223,8 +227,8 @@ void mtsMaxonController::Run()
             };
             
             
-            // 1) 读取实际位置（encoder counts）
-            long positionCounts = 0;
+            // Read position
+            int positionCounts = 0;
             if (VCS_GetPositionIs(mRobots[i].mHandles[axis], mRobots[i].mAxisToNodeIDMap[axis], &positionCounts, &mRobots[i].mErrorCode)) {
                 mRobots[i].m_measured_js.Position()[axis] = static_cast<double>(positionCounts);
                 mRobots[i].mActuatorState.Position()[axis] = static_cast<double>(positionCounts);
@@ -232,8 +236,8 @@ void mtsMaxonController::Run()
                 mRobots[i].mInterface->SendError(mRobots[i].name + ": GetPositionIs failed (err=" + std::to_string(mRobots[i].mErrorCode) + ")");
             }
 
-            // 2) 读取实际速度（counts/sec）
-            long velocityCounts = 0;
+            // Read Velocity
+            int velocityCounts = 0;
             if (VCS_GetVelocityIs(mRobots[i].mHandles[axis], mRobots[i].mAxisToNodeIDMap[axis], &velocityCounts, &mRobots[i].mErrorCode)) {
                 mRobots[i].m_measured_js.Velocity()[axis] = static_cast<double>(velocityCounts);
                 mRobots[i].mActuatorState.Velocity()[axis] = static_cast<double>(velocityCounts);
@@ -241,11 +245,11 @@ void mtsMaxonController::Run()
                 mRobots[i].mInterface->SendError(mRobots[i].name + ": GetVelocityIs failed (err=" + std::to_string(mRobots[i].mErrorCode) + ")");
             }
 
-            // 4) 读取使能/故障状态
+            // Enable state
             VCS_GetEnableState(mRobots[i].mHandles[axis], mRobots[i].mAxisToNodeIDMap[axis], &mRobots[i].mMotorPowerOn, &mRobots[i].mErrorCode);
             mRobots[i].mActuatorState.MotorOff()[axis] = !mRobots[i].mMotorPowerOn;
 
-            // 5) 更新运动状态标志
+            // Update movement status
             mRobots[i].mMotionActive = (velocityCounts != 0);
             mRobots[i].mActuatorState.InMotion()[axis] = mRobots[i].mMotionActive;
         }
@@ -272,7 +276,7 @@ void mtsMaxonController::Run()
 // Fixed
 void mtsMaxonController::Close()
 {
-    // 1) 先关闭所有通过 VCS_OpenSubDevice 打开的子设备
+    // 1) Close sub device first
     for (size_t i = 0; i < mRobots.size(); ++i) {
         for (size_t axis = 1; axis < mRobots[i].mHandles.size(); ++axis) {
             if (mRobots[i].mHandles[axis]) {
@@ -297,16 +301,13 @@ void mtsMaxonController::Close()
 // Fixed
 void mtsMaxonController::RobotData::EnableMotorPower(void)
 {
-    if (!mParent || !mParent->mEposHandle) {
-        return;
-    }
+    if (!mParent) {return;}
 
     mErrorCode = 0;
     try {
 
         for (size_t axis = 0; axis < mNumAxes; ++axis) {
-            bool   isFault = false, 
-            bool isEnabled = false;
+            int isFault = false; 
 
             // 2.1) Clear fault
             if (!VCS_GetFaultState(mHandles[axis], mAxisToNodeIDMap[axis], &isFault, &mErrorCode)) {
@@ -325,13 +326,13 @@ void mtsMaxonController::RobotData::EnableMotorPower(void)
             }
 
             // 2.2) Enable power
-            if (!VCS_GetEnableState(mHandles[axis], mAxisToNodeIDMap[axis], &isEnabled, &mErrorCode)) {
+            if (!VCS_GetEnableState(mHandles[axis], mAxisToNodeIDMap[axis], &mMotorPowerOn, &mErrorCode)) {
                 throw std::runtime_error(
                     "Axis " + std::to_string(axis) +
                     " GetEnableState failed (err=" + std::to_string(mErrorCode) + ")"
                 );
             }
-            if (!isEnabled) {
+            if (!mMotorPowerOn) {
                 if (!VCS_SetEnableState(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
                     throw std::runtime_error(
                         "Axis " + std::to_string(axis) +
@@ -351,22 +352,20 @@ void mtsMaxonController::RobotData::EnableMotorPower(void)
 // Fixed
 void mtsMaxonController::RobotData::DisableMotorPower(void)
 {
-    if (!mParent || !mParent->mEposHandle) {
-        return;
-    }
+    if (!mParent) {return;}
 
     mErrorCode = 0;
     try {
         for (size_t axis = 0; axis < mNumAxes; ++axis) {
 
-            // 2.1) 查询当前使能状态
+            // Find enable state
             if (!VCS_GetEnableState(mHandles[axis], mAxisToNodeIDMap[axis], &mMotorPowerOn, &mErrorCode)) {
                 throw std::runtime_error(
                     "Axis " + std::to_string(axis) +
                     " GetEnableState failed (err=" + std::to_string(mErrorCode) + ")"
                 );
             }
-            // 2.2) 若已使能则调用 Disable
+            // Disable only enable state
             if (mMotorPowerOn) {
                 if (!VCS_SetDisableState(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
                     throw std::runtime_error(
@@ -380,8 +379,6 @@ void mtsMaxonController::RobotData::DisableMotorPower(void)
         mActuatorState.MotorOff().SetAll(true);
     }
     catch (const std::runtime_error & e) {
-        // 4) 捕获并上报
-        mHadError = true;
         mInterface->SendError(name + ": DisableMotorPower (" + e.what() + ")");
     }
 }
@@ -389,7 +386,7 @@ void mtsMaxonController::RobotData::DisableMotorPower(void)
 // VM
 void mtsMaxonController::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
 {
-    if (!mParent || !mParent->mEposHandle) return;
+    if (!mParent) {return;}
 
     mErrorCode = 0;
 
@@ -430,7 +427,7 @@ void mtsMaxonController::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
 // PM
 void mtsMaxonController::RobotData::servo_jp(const prmPositionJointSet & jtpos)
 {
-    if (!mParent || !mParent->mHandles) return;
+    if (!mParent) {return;}
     mErrorCode = 0;
 
     try {
@@ -469,7 +466,7 @@ void mtsMaxonController::RobotData::servo_jp(const prmPositionJointSet & jtpos)
 // PPM
 void mtsMaxonController::RobotData::move_jp(const prmPositionJointSet & jtpos)
 {
-    if (!mParent || !mParent->mHandles) return;
+    if (!mParent) {return;}
 
     mErrorCode = 0;
     try {
@@ -514,6 +511,8 @@ void mtsMaxonController::RobotData::move_jp(const prmPositionJointSet & jtpos)
 // Fixed
 void mtsMaxonController::RobotData::hold(void)
 {
+    if (!mParent) {return;}
+
     // Return if all stop
     if (!mActuatorState.InMotion().Any()) {
         return;
@@ -525,7 +524,7 @@ void mtsMaxonController::RobotData::hold(void)
 
         switch (mState[axis]) {
             case ST_PVM:
-                // Velocity mode
+                // Velocity Profile mode
                 if (!VCS_HaltVelocityMovement(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
                     mInterface->SendWarning(name + ": " +
                         " axis " + std::to_string(axis) +
@@ -533,12 +532,21 @@ void mtsMaxonController::RobotData::hold(void)
                 }
                 break;
 
-            default:
-                // All other mode
+            case ST_PPM:
+                // Position Profile Mode
                 if (!VCS_HaltPositionMovement(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
                     mInterface->SendWarning(name + ": " +
                         " axis " + std::to_string(axis) +
                         " HaltPositionMovement(default) failed (err=" + std::to_string(mErrorCode) + ")");
+                }
+                break;
+
+            case ST_VM:
+                // Velocity mode
+                if (!VCS_SetVelocityMust(mHandles[axis], mAxisToNodeIDMap[axis], 0, &mErrorCode)) {
+                    mInterface->SendWarning(name + ": " +
+                        " axis " + std::to_string(axis) +
+                        " HaltVelicty(default) failed (err=" + std::to_string(mErrorCode) + ")");
                 }
                 break;
         }
@@ -548,90 +556,33 @@ void mtsMaxonController::RobotData::hold(void)
     mActuatorState.InMotion().SetAll(false);
 }
 
-void mtsMaxonController::RobotData::SetSpeed(const vctDoubleVec & spd)
-{
-    // 1) 检查父对象和总线句柄
-    if (!mParent || !mParent->mEposHandle) {
-        return;
-    }
-
-    mErrorCode = 0;
-
-    try {
-
-        for (size_t axis = 0; axis < mNumAxes; ++axis) {
-            if (mActuatorState.MotorOff()[axis]) {
-                continue;
-            }
-            if (!VCS_SetVelocityMust(mHandles[axis], mAxisToNodeIDMap[axis], spd[axis], &mErrorCode)) {
-                throw std::runtime_error(
-                    "Axis " + std::to_string(axis) +
-                    " SetVelocityMust failed (err=" + std::to_string(mErrorCode) + ")"
-                );
-            }
-        }
-
-    }
-    catch (const std::runtime_error & e) {
-        mInterface->SendError(name + ": SetSpeed (" + e.what() + ")");
-    }
-}
-
-void mtsMaxonController::RobotData::SetAccel(const vctDoubleVec & accel)
+void mtsMaxonController::RobotData::SetPositionProfile(
+    const vctDoubleVec & profileVelocity,
+    const vctDoubleVec & profileAcceleration,
+    const vctDoubleVec & profileDeceleration)
 {
     // 1) 参数检查
-    if (!mParent || !mParent->mEposHandle) return;
+    if (!mParent) {return;}
 
-    // 2) 准备错误码
     mErrorCode = 0;
-
     try {
-        // 3) 多轴循环，分别设置最大加速度
+        // 2) 对每根轴调用 VCS_SetPositionProfile
         for (size_t axis = 0; axis < mNumAxes; ++axis) {
             // 跳过已断电的轴
             if (mActuatorState.MotorOff()[axis]) {
                 continue;
             }
 
-            if (!VCS_SetMaxAcceleration(mHandles[axis], mAxisToNodeIDMap[axis], accel[axis], &mErrorCode)) {
+            if (!VCS_SetPositionProfile(mHandles[axis], mAxisToNodeIDMap[axis],profileVelocity[axis],profileAcceleration[axis],profileDeceleration[axis],&mErrorCode)) {
                 throw std::runtime_error(
                     "Axis " + std::to_string(axis) +
-                    " SetMaxAcceleration failed (err=" +
+                    " SetPositionProfile failed (err=" +
                     std::to_string(mErrorCode) + ")"
                 );
             }
         }
     }
     catch (const std::runtime_error & e) {
-        mInterface->SendError(name + ": SetAccel (" + e.what() + ")");
-    }
-}
-
-void mtsMaxonController::RobotData::SetDecel(const vctDoubleVec & decel)
-{
-    // 1) 参数检查
-    if (!mParent || !mParent->mEposHandle) return;
-
-    // 2) 准备错误码
-    mErrorCode = 0;
-
-    try {
-        // 3) 多轴循环，分别设置最大减速度
-        for (size_t axis = 0; axis < mNumAxes; ++axis) {
-            // 跳过已断电的轴
-            if (mActuatorState.MotorOff()[axis]) {
-                continue;
-            }
-            if (!VCS_SetMaxDeceleration(mHandles[axis], mAxisToNodeIDMap[axis], decel[axis], &mErrorCode)) {
-                throw std::runtime_error(
-                    "Axis " + std::to_string(axis) +
-                    " SetMaxDeceleration failed (err=" +
-                    std::to_string(mErrorCode) + ")"
-                );
-            }
-        }
-    }
-    catch (const std::runtime_error & e) {
-        mInterface->SendError(name + ": SetDecel (" + e.what() + ")");
+        mInterface->SendError(name + ": SetPositionProfile (" + e.what() + ")");
     }
 }
