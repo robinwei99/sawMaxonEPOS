@@ -15,8 +15,8 @@ http://www.cisst.org/cisst/license.txt.
 --- end cisst license ---
 */
 
-#ifndef _mtsGalilController_h
-#define _mtsGalilController_h
+#ifndef _mtsMaxonController_h
+#define _mtsMaxonController_h
 
 #include <string>
 #include <cstdint>
@@ -47,8 +47,6 @@ class CISST_EXPORT mtsMaxonController : public mtsTaskContinuous
     mtsMaxonController(const mtsTaskContinuousConstructorArg &arg);
 
     ~mtsMaxonController();
-
-    enum { GALIL_MAX_AXES = 8 };
 
     // cisstMultiTask functions
     void Configure(const std::string &fileName) override;
@@ -102,25 +100,26 @@ protected:
         ~RobotData();
 
         // Move joint to specified position
-        //  servo_jp:  uses Position Tracking mode (PT)
-        //  move_jp:  uses Independent Axis Positioning mode (PA, BG)
+        //  servo_jp:  uses Position Mode
+        //  move_jp:  uses Position Profile Mode
         void servo_jp(const prmPositionJointSet &jtpos);
         void move_jp(const prmPositionJointSet &jtpos);
-        // Move joint to specified relative position
+        // Move joint to specified relative position (not yet implemented)
         void servo_jr(const prmPositionJointSet &jtpos);
         // Move joint at specified velocity
         void servo_jv(const prmVelocityJointSet &jtvel);
         // Hold joint at current position (Stop)
         void hold(void);
 
-        // Enable motor power
+        // Enable motor power (deprecated, use state_command instead)
         void EnableMotorPower(void);
-        // Disable motor power
+        // Disable motor power (deprecated, use state_command instead)
         void DisableMotorPower(void);
 
-        // Set this point as home.
+        // Set this point as home (not yet implemented)
         void SetHome(void);
 
+        // What is this used for?
         void SetPositionProfile(const vctDoubleVec & profileVelocity, const vctDoubleVec & profileAcceleration, const vctDoubleVec & profileDeceleration);
     };
     std::vector<RobotData> mRobots;
@@ -129,10 +128,6 @@ protected:
     void Close();
 
     void SetupInterfaces();
-
-    // Abort robot command
-    void AbortProgram();
-    void AbortMotion();
 };
 
 CMN_DECLARE_SERVICES_INSTANTIATION(mtsMaxonController)
