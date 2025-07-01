@@ -1,8 +1,7 @@
-// Eye Robot 3.0
+// Eye Snake
 // position_bits_to_SI.offset is the offset, in bits
 {
     "file_version": 1,
-    "direct_mode": 1,
     "robots": [
     {
         "name": "I2RIS",
@@ -13,14 +12,13 @@
         "timeout":1000,
         "axes": [
         {
-            "nodeid": 0            // Root should always be 0.
+            "nodeid": 0 
         },
         {
             "nodeid": 1
         },
         {
             "nodeid": 2
-            // "calibration_file":""
         }
         ]
     }

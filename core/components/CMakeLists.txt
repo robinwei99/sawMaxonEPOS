@@ -10,7 +10,7 @@
 # --- end cisst license ---
 
 cmake_minimum_required (VERSION 3.10)
-project (sawMaxonController VERSION 0.1.0)
+project (sawMaxonEPOS VERSION 0.1.0)
 
 # So we can use Findgclib.cmake
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -31,7 +31,7 @@ if (cisst_FOUND_AS_REQUIRED)
   include (${CISST_USE_FILE})
 
   if (NOT CISST_HAS_JSON)
-    message( FATAL_ERROR "sawMaxonController requires cisst to be built with JSON" )
+    message( FATAL_ERROR "sawMaxonEPOS requires cisst to be built with JSON" )
   endif ()
 
   # catkin/ROS paths
@@ -46,56 +46,56 @@ if (cisst_FOUND_AS_REQUIRED)
     include_directories (${EposCmdLib_INCLUDE_DIR})
     link_directories (${EposCmdLib_LIBRARY_DIR})
 
-    set (sawMaxonController_INCLUDE_DIR
-      "${sawMaxonController_SOURCE_DIR}/include"
-      "${sawMaxonController_BINARY_DIR}/include")
-    set (sawMaxonController_HEADER_DIR "${sawMaxonController_SOURCE_DIR}/include/sawMaxonController")
-    set (sawMaxonController_LIBRARY_DIR "${LIBRARY_OUTPUT_PATH}" "${EposCmdLib_LIBRARY_DIR}")
-    set (sawMaxonController_LIBRARIES sawMaxonController)
+    set (sawMaxonEPOS_INCLUDE_DIR
+      "${sawMaxonEPOS_SOURCE_DIR}/include"
+      "${sawMaxonEPOS_BINARY_DIR}/include")
+    set (sawMaxonEPOS_HEADER_DIR "${sawMaxonEPOS_SOURCE_DIR}/include/sawMaxonEPOS")
+    set (sawMaxonEPOS_LIBRARY_DIR "${LIBRARY_OUTPUT_PATH}" "${EposCmdLib_LIBRARY_DIR}")
+    set (sawMaxonEPOS_LIBRARIES sawMaxonEPOS)
 
-    include_directories (BEFORE ${sawMaxonController_INCLUDE_DIR})
+    include_directories (BEFORE ${sawMaxonEPOS_INCLUDE_DIR})
 
     # add all config files for this component
-    cisst_add_config_files (sawMaxonController)
+    cisst_add_config_files (sawMaxonEPOS)
 
-    set (sawMaxonController_HEADER_FILES
-      "${sawMaxonController_HEADER_DIR}/mtsMaxonController.h"
-      "${sawMaxonController_HEADER_DIR}/sawMaxonControllerExport.h"
-      ${sawMaxonController_CISST_DG_HDRS})
+    set (sawMaxonEPOS_HEADER_FILES
+      "${sawMaxonEPOS_HEADER_DIR}/mtsMaxonEPOS.h"
+      "${sawMaxonEPOS_HEADER_DIR}/sawMaxonEPOSExport.h"
+      ${sawMaxonEPOS_CISST_DG_HDRS})
 
-    set (sawMaxonController_SOURCE_FILES
-      code/mtsMaxonController.cpp)
+    set (sawMaxonEPOS_SOURCE_FILES
+      code/mtsMaxonEPOS.cpp)
 
     add_library (
-      sawMaxonController
+      sawMaxonEPOS
       ${IS_SHARED}
-      ${sawMaxonController_HEADER_FILES}
-      ${sawMaxonController_SOURCE_FILES})
+      ${sawMaxonEPOS_HEADER_FILES}
+      ${sawMaxonEPOS_SOURCE_FILES})
 
     set_target_properties (
-      sawMaxonController PROPERTIES
-      VERSION ${sawMaxonController_VERSION}
-      FOLDER "sawMaxonController")
+      sawMaxonEPOS PROPERTIES
+      VERSION ${sawMaxonEPOS_VERSION}
+      FOLDER "sawMaxonEPOS")
 
     target_link_libraries (
-      sawMaxonController
+      sawMaxonEPOS
       ${gclib_LIBRARIES})
 
     cisst_target_link_libraries (
-      sawMaxonController
+      sawMaxonEPOS
       ${REQUIRED_CISST_LIBRARIES})
 
     # Install target for headers and library
     install (
       DIRECTORY
-      "${sawMaxonController_SOURCE_DIR}/include/sawMaxonController"
-      "${sawMaxonController_BINARY_DIR}/include/sawMaxonController"
+      "${sawMaxonEPOS_SOURCE_DIR}/include/sawMaxonEPOS"
+      "${sawMaxonEPOS_BINARY_DIR}/include/sawMaxonEPOS"
       DESTINATION include
-      COMPONENT sawMaxonController-dev)
+      COMPONENT sawMaxonEPOS-dev)
 
     install (
-      TARGETS sawMaxonController
-      COMPONENT sawMaxonController
+      TARGETS sawMaxonEPOS
+      COMPONENT sawMaxonEPOS
       RUNTIME DESTINATION bin
       LIBRARY DESTINATION lib
       ARCHIVE DESTINATION lib)

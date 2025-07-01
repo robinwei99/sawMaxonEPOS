@@ -14,7 +14,7 @@ http://www.cisst.org/cisst/license.txt.
 */
 
 // check if this module is built as a DLL
-#ifdef sawMaxonController_EXPORTS
+#ifdef sawMaxonEPOS_EXPORTS
 #define CISST_THIS_LIBRARY_AS_DLL
 #endif
 

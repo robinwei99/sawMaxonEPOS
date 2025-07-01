@@ -15,8 +15,8 @@ http://www.cisst.org/cisst/license.txt.
 --- end cisst license ---
 */
 
-#ifndef _mtsGalilController_h
-#define _mtsGalilController_h
+#ifndef _mtsGalilEPOS_h
+#define _mtsGalilEPOS_h
 
 #include <string>
 #include <cstdint>
@@ -34,19 +34,19 @@ http://www.cisst.org/cisst/license.txt.
 #include <cisstParameterTypes/prmActuatorState.h>
 
 // Always include last
-#include <sawMaxonController/sawMaxonControllerExport.h>
+#include <sawMaxonEPOS/sawMaxonEPOSExport.h>
 
-class CISST_EXPORT mtsMaxonController : public mtsTaskContinuous
+class CISST_EXPORT mtsMaxonEPOS : public mtsTaskContinuous
 {
     CMN_DECLARE_SERVICES(CMN_DYNAMIC_CREATION_ONEARG, CMN_LOG_LOD_RUN_ERROR)
 
  public:
 
-    mtsMaxonController(const std::string &name);
-    mtsMaxonController(const std::string &name, unsigned int sizeStateTable, bool newThread = true);
-    mtsMaxonController(const mtsTaskContinuousConstructorArg &arg);
+    mtsMaxonEPOS(const std::string &name);
+    mtsMaxonEPOS(const std::string &name, unsigned int sizeStateTable, bool newThread = true);
+    mtsMaxonEPOS(const mtsTaskContinuousConstructorArg &arg);
 
-    ~mtsMaxonController();
+    ~mtsMaxonEPOS();
 
     enum { GALIL_MAX_AXES = 8 };
 
@@ -93,7 +93,7 @@ protected:
         
         unsigned int  mErrorCode;               // Indicates that an error occurred last iteration
 
-        mtsMaxonController *mParent;            // Pointer to parent object
+        mtsMaxonEPOS *mParent;            // Pointer to parent object
 
         std::vector<void*> mHandles;
         // std::vector<std::string> mCalibrationFile;
@@ -135,6 +135,6 @@ protected:
     void AbortMotion();
 };
 
-CMN_DECLARE_SERVICES_INSTANTIATION(mtsMaxonController)
+CMN_DECLARE_SERVICES_INSTANTIATION(mtsMaxonEPOS)
 
 #endif

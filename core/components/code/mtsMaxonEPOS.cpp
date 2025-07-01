@@ -11,37 +11,31 @@ This software is provided "as is" under an open source license, with no warranty
 #include <cisstCommon/cmnPath.h>
 #include <cisstCommon/cmnAssert.h>
 #include <cisstOSAbstraction/osaSleep.h>
-#include <sawMaxonController/mtsMaxonController.h>
-
-// 如果需要 Homing，则引入 EPOS Homing 接口
-// extern "C" {
-//    BOOL VCS_ActivateHomingMode(HANDLE, WORD, DWORD*);
-//    BOOL VCS_FindHomePosition(HANDLE, WORD, DWORD*);
-// }
+#include <sawMaxonEPOS/mtsMaxonEPOS.h>
 
 enum OP_STATES { ST_PPM, ST_PVM, ST_PM, ST_VM, ST_CM, ST_HM, ST_MEM, ST_SDM, ST_IPM };
 
-CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsMaxonController, mtsTaskContinuous, mtsTaskContinuousConstructorArg);
+CMN_IMPLEMENT_SERVICES_DERIVED_ONEARG(mtsMaxonEPOS, mtsTaskContinuous, mtsTaskContinuousConstructorArg);
 
-mtsMaxonController::mtsMaxonController(const std::string &name) :
+mtsMaxonEPOS::mtsMaxonEPOS(const std::string &name) :
     mtsTaskContinuous(name, 1024, true)
 {}
 
-mtsMaxonController::mtsMaxonController(const std::string &name, unsigned int sizeStateTable, bool newThread) :
+mtsMaxonEPOS::mtsMaxonEPOS(const std::string &name, unsigned int sizeStateTable, bool newThread) :
     mtsTaskContinuous(name, sizeStateTable, newThread)
 {}
 
-mtsMaxonController::mtsMaxonController(const mtsTaskContinuousConstructorArg & arg) :
+mtsMaxonEPOS::mtsMaxonEPOS(const mtsTaskContinuousConstructorArg & arg) :
     mtsTaskContinuous(arg)
 {}
 
-mtsMaxonController::~mtsMaxonController()
+mtsMaxonEPOS::~mtsMaxonEPOS()
 {
     Close();
 }
 
 
-void mtsMaxonController::SetupInterfaces(void)
+void mtsMaxonEPOS::SetupInterfaces(void)
 {
     for (size_t i = 0; i < mRobots.size(); i++) {
         StateTable.AddData(mRobots[i].m_measured_js, "measured_js");
@@ -57,13 +51,13 @@ void mtsMaxonController::SetupInterfaces(void)
             prov->AddCommandReadState(this->StateTable, mRobots[i].m_setpoint_js, "setpoint_js");
             // prov->AddCommandReadState(this->StateTable, mRobots[i].m_op_state, "operating_state");
 
-            prov->AddCommandWrite(&mtsMaxonController::RobotData::servo_jp, &mRobots[i], "servo_jp");
-            prov->AddCommandWrite(&mtsMaxonController::RobotData::move_jp,  &mRobots[i], "move_jp");
-            prov->AddCommandWrite(&mtsMaxonController::RobotData::servo_jv, &mRobots[i], "servo_jv");
+            prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::servo_jp, &mRobots[i], "servo_jp");
+            prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::move_jp,  &mRobots[i], "move_jp");
+            prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::servo_jv, &mRobots[i], "servo_jv");
 
-            prov->AddCommandVoid(&mtsMaxonController::RobotData::hold,     &mRobots[i], "hold");
-            prov->AddCommandVoid(&mtsMaxonController::RobotData::EnableMotorPower,  &mRobots[i], "EnableMotorPower");
-            prov->AddCommandVoid(&mtsMaxonController::RobotData::DisableMotorPower, &mRobots[i], "DisableMotorPower");
+            prov->AddCommandVoid(&mtsMaxonEPOS::RobotData::hold,     &mRobots[i], "hold");
+            prov->AddCommandVoid(&mtsMaxonEPOS::RobotData::EnableMotorPower,  &mRobots[i], "EnableMotorPower");
+            prov->AddCommandVoid(&mtsMaxonEPOS::RobotData::DisableMotorPower, &mRobots[i], "DisableMotorPower");
 
 
             // prov->AddCommandReadState(this->StateTable, mRobots[i].mSpeed, "GetSpeed");
@@ -73,7 +67,7 @@ void mtsMaxonController::SetupInterfaces(void)
     }
 }
 
-void mtsMaxonController::Configure(const std::string& fileName)
+void mtsMaxonEPOS::Configure(const std::string& fileName)
 {
     mConfigPath.Set(cmnPath::GetWorkingDirectory());
     std::string fullname = mConfigPath.Find(fileName);
@@ -161,7 +155,7 @@ void mtsMaxonController::Configure(const std::string& fileName)
 }
 
 
-void mtsMaxonController::Startup()//const std::string & fileName
+void mtsMaxonEPOS::Startup()//const std::string & fileName
 {
 
     for (unsigned int i = 0; i < mRobots.size(); i++) {
@@ -206,7 +200,7 @@ void mtsMaxonController::Startup()//const std::string & fileName
     SetupInterfaces();
 }
 
-void mtsMaxonController::Run()
+void mtsMaxonEPOS::Run()
 {
     for (size_t i = 0; i < mRobots.size(); ++i) {
         // First axis USB, rest of the axis are CAN
@@ -274,7 +268,7 @@ void mtsMaxonController::Run()
 }
 
 // Fixed
-void mtsMaxonController::Close()
+void mtsMaxonEPOS::Close()
 {
     // 1) Close sub device first
     for (size_t i = 0; i < mRobots.size(); ++i) {
@@ -299,7 +293,7 @@ void mtsMaxonController::Close()
 }
 
 // Fixed
-void mtsMaxonController::RobotData::EnableMotorPower(void)
+void mtsMaxonEPOS::RobotData::EnableMotorPower(void)
 {
     if (!mParent) {return;}
 
@@ -350,7 +344,7 @@ void mtsMaxonController::RobotData::EnableMotorPower(void)
 }
 
 // Fixed
-void mtsMaxonController::RobotData::DisableMotorPower(void)
+void mtsMaxonEPOS::RobotData::DisableMotorPower(void)
 {
     if (!mParent) {return;}
 
@@ -384,7 +378,7 @@ void mtsMaxonController::RobotData::DisableMotorPower(void)
 }
 
 // VM
-void mtsMaxonController::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
+void mtsMaxonEPOS::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
 {
     if (!mParent) {return;}
 
@@ -398,6 +392,7 @@ void mtsMaxonController::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
 
             // 2.1) Active Velocity Mode.
             if (mState[axis] != ST_VM) {
+                // Check if hold(); is needed here.
                 if (!VCS_ActivateVelocityMode(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
                     throw std::runtime_error(
                         "Axis " + std::to_string(axis) +
@@ -425,7 +420,7 @@ void mtsMaxonController::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
 }
 
 // PM
-void mtsMaxonController::RobotData::servo_jp(const prmPositionJointSet & jtpos)
+void mtsMaxonEPOS::RobotData::servo_jp(const prmPositionJointSet & jtpos)
 {
     if (!mParent) {return;}
     mErrorCode = 0;
@@ -439,6 +434,7 @@ void mtsMaxonController::RobotData::servo_jp(const prmPositionJointSet & jtpos)
 
             // 2.1 Position Mode（CSP）
             if(mState[axis] != ST_PM){
+                // Check if hold(); is needed here.
                 if (!VCS_ActivatePositionMode(mHandles[axis], mAxisToNodeIDMap[axis], &mErrorCode)) {
                     throw std::runtime_error(
                         "ActivatePositionMode failed on axis " + std::to_string(axis) +
@@ -464,7 +460,7 @@ void mtsMaxonController::RobotData::servo_jp(const prmPositionJointSet & jtpos)
 }
 
 // PPM
-void mtsMaxonController::RobotData::move_jp(const prmPositionJointSet & jtpos)
+void mtsMaxonEPOS::RobotData::move_jp(const prmPositionJointSet & jtpos)
 {
     if (!mParent) {return;}
 
@@ -509,7 +505,7 @@ void mtsMaxonController::RobotData::move_jp(const prmPositionJointSet & jtpos)
 }
 
 // Fixed
-void mtsMaxonController::RobotData::hold(void)
+void mtsMaxonEPOS::RobotData::hold(void)
 {
     if (!mParent) {return;}
 
@@ -551,12 +547,12 @@ void mtsMaxonController::RobotData::hold(void)
                 break;
         }
     }
-    osaSleep(0.05);
+    // osaSleep(0.05);
     // Clear moving flag.
     mActuatorState.InMotion().SetAll(false);
 }
 
-void mtsMaxonController::RobotData::SetPositionProfile(
+void mtsMaxonEPOS::RobotData::SetPositionProfile(
     const vctDoubleVec & profileVelocity,
     const vctDoubleVec & profileAcceleration,
     const vctDoubleVec & profileDeceleration)
