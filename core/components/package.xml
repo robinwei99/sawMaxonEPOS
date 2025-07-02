@@ -10,7 +10,7 @@
   <run_depend>cisst</run_depend>
 
   <export>
-    <build_type>catkin</build_type>
+    <build_type>cmake</build_type>
   </export>
 
 </package>

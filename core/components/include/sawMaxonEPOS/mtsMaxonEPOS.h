@@ -79,7 +79,7 @@ protected:
         
         prmOperatingState m_op_state;           // Operating state (CRTK)
         prmOperatingState::StateType newState;
-        mtsFunctionWrite operating_state;       // Event generator
+        // mtsFunctionWrite operating_state;       // Event generator
 
         prmActuatorState mActuatorState;        // Actuator state
 
@@ -118,12 +118,17 @@ protected:
         // Disable motor power
         void DisableMotorPower(void);
 
+        // Set operating state
+        void state_command(const std::string &command);
+
+        bool CheckStateEnabled(const char *cmdName) const;
+
         // Set this point as home.
         void SetHome(void);
 
         void SetPositionProfile(const vctDoubleVec & profileVelocity, const vctDoubleVec & profileAcceleration, const vctDoubleVec & profileDeceleration);
     };
-    std::vector<RobotData> mRobots;
+    RobotData mRobot;
 
     void Init();
     void Close();

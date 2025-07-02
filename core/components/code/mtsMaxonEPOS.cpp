@@ -37,33 +37,34 @@ mtsMaxonEPOS::~mtsMaxonEPOS()
 
 void mtsMaxonEPOS::SetupInterfaces(void)
 {
-    for (size_t i = 0; i < mRobots.size(); i++) {
-        StateTable.AddData(mRobots[i].m_measured_js, "measured_js");
-        StateTable.AddData(mRobots[i].m_setpoint_js, "setpoint_js");
-        StateTable.AddData(mRobots[i].mActuatorState, "actuator_state");
-        StateTable.AddData(mRobots[i].mErrorCode, "error_code");
-        
-        mtsInterfaceProvided *prov = AddInterfaceProvided(mRobots[i].name);
-        mRobots[i].mInterface = prov;
-        if (prov) {
-            prov->AddMessageEvents();
-            prov->AddCommandReadState(this->StateTable, mRobots[i].m_measured_js, "measured_js");
-            prov->AddCommandReadState(this->StateTable, mRobots[i].m_setpoint_js, "setpoint_js");
-            // prov->AddCommandReadState(this->StateTable, mRobots[i].m_op_state, "operating_state");
+    StateTable.AddData(mRobot.m_measured_js, "measured_js");
+    StateTable.AddData(mRobot.m_setpoint_js, "setpoint_js");
+    StateTable.AddData(mRobot.mActuatorState, "actuator_state");
+    StateTable.AddData(mRobot.mErrorCode, "error_code");
+    mRobot.m_op_state.SetValid(true);
+    StateTable.AddData(mRobot.m_op_state, "op_state");
+    
+    mtsInterfaceProvided *prov = AddInterfaceProvided(mRobot.name);
+    mRobot.mInterface = prov;
+    if (prov) {
+        prov->AddMessageEvents();
+        prov->AddCommandReadState(this->StateTable, mRobot.m_measured_js, "measured_js");
+        prov->AddCommandReadState(this->StateTable, mRobot.m_setpoint_js, "setpoint_js");
+        prov->AddCommandReadState(this->StateTable, mRobot.m_op_state, "operating_state");
 
-            prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::servo_jp, &mRobots[i], "servo_jp");
-            prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::move_jp,  &mRobots[i], "move_jp");
-            prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::servo_jv, &mRobots[i], "servo_jv");
+        prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::servo_jp, &mRobot, "servo_jp");
+        prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::move_jp,  &mRobot, "move_jp");
+        prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::servo_jv, &mRobot, "servo_jv");
 
-            prov->AddCommandVoid(&mtsMaxonEPOS::RobotData::hold,     &mRobots[i], "hold");
-            prov->AddCommandVoid(&mtsMaxonEPOS::RobotData::EnableMotorPower,  &mRobots[i], "EnableMotorPower");
-            prov->AddCommandVoid(&mtsMaxonEPOS::RobotData::DisableMotorPower, &mRobots[i], "DisableMotorPower");
+        prov->AddCommandWrite(&mtsMaxonEPOS::RobotData::state_command, &mRobot, "state_command", std::string(""));
 
+        // prov->AddCommandVoid(&mtsMaxonEPOS::RobotData::EnableMotorPower,  &mRobot, "EnableMotorPower");
+        // prov->AddCommandVoid(&mtsMaxonEPOS::RobotData::DisableMotorPower, &mRobot, "DisableMotorPower");
+        // prov->AddCommandVoid(&mtsMaxonEPOS::RobotData::hold,     &mRobot, "hold");
 
-            // prov->AddCommandReadState(this->StateTable, mRobots[i].mSpeed, "GetSpeed");
-            // prov->AddCommandReadState(this->StateTable, mRobots[i].mAccel, "GetAccel");
-            // prov->AddCommandReadState(this->StateTable, mRobots[i].mDecel, "GetDecel");
-        }
+        // prov->AddCommandReadState(this->StateTable, mRobot.mSpeed, "GetSpeed");
+        // prov->AddCommandReadState(this->StateTable, mRobot.mAccel, "GetAccel");
+        // prov->AddCommandReadState(this->StateTable, mRobot.mDecel, "GetDecel");
     }
 }
 
@@ -96,55 +97,46 @@ void mtsMaxonEPOS::Configure(const std::string& fileName)
         exit(EXIT_FAILURE);
     }
 
-    if (jsonConfig["robots"].size() < 1) {
-        CMN_LOG_CLASS_INIT_ERROR << "Configure: no robots or analog inputs specified!" << std::endl;
-        exit(EXIT_FAILURE);
-    }
+    mRobot.name = jsonConfig["name"].asString();
+    mRobot.deviceName = jsonConfig["device_name"].asString();
+    mRobot.protocolStackName = jsonConfig["protocol_stack_name"].asString();
+    mRobot.interfaceName = jsonConfig["interface_name"].asString();
+    mRobot.portName = jsonConfig["port_name"].asString();
+    mRobot.mTimeout = jsonConfig["timeout"].asUInt();
 
-    // Process the robot configuration data
-    mRobots.resize(jsonConfig["robots"].size());
-    for (unsigned int i = 0; i < jsonConfig["robots"].size(); i++) {
-        mRobots[i].name = jsonConfig["robots"][i]["name"].asString();
-        mRobots[i].deviceName = jsonConfig["robots"][i]["device_name"].asString();
-        mRobots[i].protocolStackName = jsonConfig["robots"][i]["protocol_stack_name"].asString();
-        mRobots[i].interfaceName = jsonConfig["robots"][i]["interface_name"].asString();
-        mRobots[i].portName = jsonConfig["robots"][i]["port_name"].asString();
-        mRobots[i].mTimeout = jsonConfig["robots"][i]["timeout"].asUInt();
+    mRobot.mParent = this;
+    // Size of array determines number of axes
+    size_t numAxes = jsonConfig["axes"].size();
+    CMN_LOG_CLASS_INIT_VERBOSE << "Configure: robot " << mRobot.name
+                                << " has " << numAxes << " axes" << std::endl;
+    mRobot.mNumAxes = static_cast<unsigned int>(numAxes);
 
-        mRobots[i].mParent = this;
-        // Size of array determines number of axes
-        size_t numAxes = jsonConfig["robots"][i]["axes"].size();
-        CMN_LOG_CLASS_INIT_VERBOSE << "Configure: robot " << mRobots[i].name
-                                   << " has " << numAxes << " axes" << std::endl;
-        mRobots[i].mNumAxes = static_cast<unsigned int>(numAxes);
+    // We have position and velocity for measured_js
+    mRobot.m_measured_js.Name().resize(numAxes);
+    mRobot.m_measured_js.Position().SetSize(numAxes);
+    mRobot.m_measured_js.Velocity().SetSize(numAxes);
+    mRobot.m_measured_js.Position().SetAll(0.0);
+    mRobot.m_measured_js.Velocity().SetAll(0.0);
+    // We have position and effort for setpoint_js
+    mRobot.m_setpoint_js.Name().resize(numAxes);
+    mRobot.m_setpoint_js.Position().SetSize(numAxes);
+    mRobot.m_setpoint_js.Effort().SetSize(numAxes);
+    mRobot.m_setpoint_js.Position().SetAll(0.0);
+    mRobot.m_setpoint_js.Effort().SetAll(0.0);
 
-        // We have position and velocity for measured_js
-        mRobots[i].m_measured_js.Name().resize(numAxes);
-        mRobots[i].m_measured_js.Position().SetSize(numAxes);
-        mRobots[i].m_measured_js.Velocity().SetSize(numAxes);
-        mRobots[i].m_measured_js.Position().SetAll(0.0);
-        mRobots[i].m_measured_js.Velocity().SetAll(0.0);
-        // We have position and effort for setpoint_js
-        mRobots[i].m_setpoint_js.Name().resize(numAxes);
-        mRobots[i].m_setpoint_js.Position().SetSize(numAxes);
-        mRobots[i].m_setpoint_js.Effort().SetSize(numAxes);
-        mRobots[i].m_setpoint_js.Position().SetAll(0.);
-        mRobots[i].m_setpoint_js.Effort().SetAll(0.0);
+    mRobot.mActuatorState.SetSize(static_cast<prmActuatorState::size_type>(numAxes));
+    mRobot.mActuatorState.Position().SetAll(0.0);
+    mRobot.mActuatorState.Velocity().SetAll(0.0);
 
-        mRobots[i].mActuatorState.SetSize(static_cast<prmActuatorState::size_type>(numAxes));
-        mRobots[i].mActuatorState.Position().SetAll(0.0);
-        mRobots[i].mActuatorState.Velocity().SetAll(0.0);
+    mRobot.mAxisToNodeIDMap.SetSize(numAxes);
 
-        mRobots[i].mAxisToNodeIDMap.SetSize(numAxes);
+    mRobot.mState.SetSize(numAxes);
+    mRobot.mState.SetAll(ST_PPM);
 
-        mRobots[i].mState.SetSize(numAxes);
-        mRobots[i].mState.SetAll(ST_PPM);
-
-        mRobots[i].mHandles.resize(numAxes);
-        for (unsigned int axis = 0; axis < numAxes; axis++){
-            mRobots[i].mAxisToNodeIDMap[axis] = jsonConfig["robots"][i]["axes"][axis]["nodeid"].asInt();
-            // mRobots[i].mCalibrationFile.push_back(jsonConfig["robots"][i]["axes"][axis]["calibration_file"].asString(););
-        }
+    mRobot.mHandles.resize(numAxes);
+    for (unsigned int axis = 0; axis < numAxes; axis++){
+        mRobot.mAxisToNodeIDMap[axis] = jsonConfig["axes"][axis]["nodeid"].asInt();
+        // mRobot.mCalibrationFile.push_back(jsonConfig["axes"][axis]["calibration_file"].asString(););
     }
 
     // Call SetupInterfaces after Configure because we need to know the correct sizes of
@@ -158,43 +150,41 @@ void mtsMaxonEPOS::Configure(const std::string& fileName)
 void mtsMaxonEPOS::Startup()//const std::string & fileName
 {
 
-    for (unsigned int i = 0; i < mRobots.size(); i++) {
-        // Zero Error Code
-        mRobots[i].mErrorCode = 0;
-        
-        mRobots[i].mHandles[0] = VCS_OpenDevice(const_cast<char*>(mRobots[i].deviceName.c_str()),
-                                 const_cast<char*>(mRobots[i].protocolStackName.c_str()),
-                                 const_cast<char*>(mRobots[i].interfaceName.c_str()),
-                                 const_cast<char*>(mRobots[i].portName.c_str()),
-                                 &mRobots[i].mErrorCode);
-        if (mRobots[i].mHandles[0] == nullptr || mRobots[i].mErrorCode != 0){
-            for (unsigned int j = 1; j < mRobots[i].mNumAxes; j++){
-                mRobots[i].mHandles[j] = VCS_OpenSubDevice(mRobots[i].mHandles[0],
-                                 const_cast<char*>(mRobots[i].deviceName.c_str()),
-                                 const_cast<char*>("CANopen"),
-                                 &mRobots[i].mErrorCode);
-                if(mRobots[i].mHandles[j]==0){
-                    CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_OpenSubDevice " << j << " failed (errorCode = " << mRobots[i].mErrorCode << ")" << std::endl;
-                    exit(EXIT_FAILURE);
-                }
+    // Zero Error Code
+    mRobot.mErrorCode = 0;
+    
+    mRobot.mHandles[0] = VCS_OpenDevice(const_cast<char*>(mRobot.deviceName.c_str()),
+                                const_cast<char*>(mRobot.protocolStackName.c_str()),
+                                const_cast<char*>(mRobot.interfaceName.c_str()),
+                                const_cast<char*>(mRobot.portName.c_str()),
+                                &mRobot.mErrorCode);
+    if (mRobot.mHandles[0] == nullptr || mRobot.mErrorCode != 0){
+        for (unsigned int j = 1; j < mRobot.mNumAxes; j++){
+            mRobot.mHandles[j] = VCS_OpenSubDevice(mRobot.mHandles[0],
+                                const_cast<char*>(mRobot.deviceName.c_str()),
+                                const_cast<char*>("CANopen"),
+                                &mRobot.mErrorCode);
+            if(mRobot.mHandles[j]==0){
+                CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_OpenSubDevice " << j << " failed (errorCode = " << mRobot.mErrorCode << ")" << std::endl;
+                exit(EXIT_FAILURE);
             }
         }
-        else{
-            CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_OpenDevice failed (errorCode = " << mRobots[i].mErrorCode << ")" << std::endl;
-            exit(EXIT_FAILURE);
-        }
+    }
+    else{
+        CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_OpenDevice failed (errorCode = " << mRobot.mErrorCode << ")" << std::endl;
+        exit(EXIT_FAILURE);
+    }
 
-        unsigned int oldTimeout;
-        if (!VCS_GetProtocolStackSettings(mRobots[i].mHandles[0], &mRobots[i].baudrate, &oldTimeout, &mRobots[i].mErrorCode)) {
-            CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_GetProtocolStackSettings failed (errorCode = "
-                                    << mRobots[i].mErrorCode << ")\n";
-            exit(EXIT_FAILURE);
-        }
-        if (!VCS_SetProtocolStackSettings(mRobots[i].mHandles[0], mRobots[i].baudrate, mRobots[i].mTimeout, &mRobots[i].mErrorCode)) {
-            CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_SetProtocolStackSettings failed (errorCode = "
-                                    << mRobots[i].mErrorCode << ")\n";
-            exit(EXIT_FAILURE);
-        }
+    unsigned int oldTimeout;
+    if (!VCS_GetProtocolStackSettings(mRobot.mHandles[0], &mRobot.baudrate, &oldTimeout, &mRobot.mErrorCode)) {
+        CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_GetProtocolStackSettings failed (errorCode = "
+                                << mRobot.mErrorCode << ")\n";
+        exit(EXIT_FAILURE);
+    }
+    if (!VCS_SetProtocolStackSettings(mRobot.mHandles[0], mRobot.baudrate, mRobot.mTimeout, &mRobot.mErrorCode)) {
+        CMN_LOG_CLASS_INIT_ERROR << "Configure: VCS_SetProtocolStackSettings failed (errorCode = "
+                                << mRobot.mErrorCode << ")\n";
+        exit(EXIT_FAILURE);
     }
 
     SetupInterfaces();
@@ -202,53 +192,65 @@ void mtsMaxonEPOS::Startup()//const std::string & fileName
 
 void mtsMaxonEPOS::Run()
 {
-    for (size_t i = 0; i < mRobots.size(); ++i) {
-        // First axis USB, rest of the axis are CAN
-        for (size_t axis = 0; axis < mRobots[i].mNumAxes; ++axis) {
-            // Zero errorCode
-            mRobots[i].mErrorCode = 0;
+    int isFault = false;
+    // First axis USB, rest of the axis are CAN
+    for (size_t axis = 0; axis < mRobot.mNumAxes; ++axis) {
+        // Zero errorCode
+        mRobot.mErrorCode = 0;
 
-            int isFault = false;
-            if (VCS_GetFaultState(mRobots[i].mHandles[axis],  mRobots[i].mAxisToNodeIDMap[axis], &isFault,  &mRobots[i].mErrorCode)) {
-                if(isFault){
-                    mRobots[i].mActuatorState.MotorOff()[axis] = false;
-                    mRobots[i].mActuatorState.InMotion()[axis] = false;
-                    mRobots[i].mInterface->SendError(mRobots[i].name + ": Axis: " + std::to_string(axis) + " is in fault state");
-                    continue;
-                }
-            } else {
-                mRobots[i].mInterface->SendError(mRobots[i].name + ": GetFaultState failed (err=" + std::to_string(mRobots[i].mErrorCode) + ")");
-            };
-            
-            
-            // Read position
-            int positionCounts = 0;
-            if (VCS_GetPositionIs(mRobots[i].mHandles[axis], mRobots[i].mAxisToNodeIDMap[axis], &positionCounts, &mRobots[i].mErrorCode)) {
-                mRobots[i].m_measured_js.Position()[axis] = static_cast<double>(positionCounts);
-                mRobots[i].mActuatorState.Position()[axis] = static_cast<double>(positionCounts);
-            } else {
-                mRobots[i].mInterface->SendError(mRobots[i].name + ": GetPositionIs failed (err=" + std::to_string(mRobots[i].mErrorCode) + ")");
+        if (VCS_GetFaultState(mRobot.mHandles[axis],  mRobot.mAxisToNodeIDMap[axis], &isFault,  &mRobot.mErrorCode)) {
+            if(isFault){
+                mRobot.mActuatorState.MotorOff()[axis] = false;
+                mRobot.mActuatorState.InMotion()[axis] = false;
+                mRobot.mInterface->SendError(mRobot.name + ": Axis: " + std::to_string(axis) + " is in fault state");
+                break;
             }
-
-            // Read Velocity
-            int velocityCounts = 0;
-            if (VCS_GetVelocityIs(mRobots[i].mHandles[axis], mRobots[i].mAxisToNodeIDMap[axis], &velocityCounts, &mRobots[i].mErrorCode)) {
-                mRobots[i].m_measured_js.Velocity()[axis] = static_cast<double>(velocityCounts);
-                mRobots[i].mActuatorState.Velocity()[axis] = static_cast<double>(velocityCounts);
-            } else {
-                mRobots[i].mInterface->SendError(mRobots[i].name + ": GetVelocityIs failed (err=" + std::to_string(mRobots[i].mErrorCode) + ")");
-            }
-
-            // Enable state
-            VCS_GetEnableState(mRobots[i].mHandles[axis], mRobots[i].mAxisToNodeIDMap[axis], &mRobots[i].mMotorPowerOn, &mRobots[i].mErrorCode);
-            mRobots[i].mActuatorState.MotorOff()[axis] = !mRobots[i].mMotorPowerOn;
-
-            // Update movement status
-            mRobots[i].mMotionActive = (velocityCounts != 0);
-            mRobots[i].mActuatorState.InMotion()[axis] = mRobots[i].mMotionActive;
+        } else {
+            mRobot.mInterface->SendError(mRobot.name + ": GetFaultState failed (err=" + std::to_string(mRobot.mErrorCode) + ")");
+            break;
+        };
+        
+        // Read position
+        int positionCounts = 0;
+        if (VCS_GetPositionIs(mRobot.mHandles[axis], mRobot.mAxisToNodeIDMap[axis], &positionCounts, &mRobot.mErrorCode)) {
+            mRobot.m_measured_js.Position()[axis] = static_cast<double>(positionCounts);
+            mRobot.mActuatorState.Position()[axis] = static_cast<double>(positionCounts);
+        } else {
+            mRobot.mInterface->SendError(mRobot.name + ": GetPositionIs failed (err=" + std::to_string(mRobot.mErrorCode) + ")");
+            break;
         }
+
+        // Read Velocity
+        int velocityCounts = 0;
+        if (VCS_GetVelocityIs(mRobot.mHandles[axis], mRobot.mAxisToNodeIDMap[axis], &velocityCounts, &mRobot.mErrorCode)) {
+            mRobot.m_measured_js.Velocity()[axis] = static_cast<double>(velocityCounts);
+            mRobot.mActuatorState.Velocity()[axis] = static_cast<double>(velocityCounts);
+        } else {
+            mRobot.mInterface->SendError(mRobot.name + ": GetVelocityIs failed (err=" + std::to_string(mRobot.mErrorCode) + ")");
+            break;
+        }
+
+        // Check state
+        VCS_GetEnableState(mRobot.mHandles[axis], mRobot.mAxisToNodeIDMap[axis], &mRobot.mMotorPowerOn, &mRobot.mErrorCode);
+        mRobot.mActuatorState.MotorOff()[axis] = !mRobot.mMotorPowerOn;
+
+        // Update movement status
+        mRobot.mMotionActive = (velocityCounts != 0);
+        mRobot.mActuatorState.InMotion()[axis] = mRobot.mMotionActive;
     }
 
+    if(isFault){
+        mRobot.newState = prmOperatingState::FAULT;
+    }else if(mRobot.mActuatorState.MotorOff().Any()==true){
+        mRobot.newState = prmOperatingState::DISABLED;
+    }else{
+        mRobot.newState = prmOperatingState::ENABLED;
+    }
+    if (mRobot.newState != mRobot.m_op_state.State()) {
+        mRobot.m_op_state.SetState(mRobot.newState);
+        // Trigger event
+        // operating_state(m_op_state);
+    }
 
     // Advance the state table now, so that any connected components can get
     // the latest data.
@@ -271,24 +273,65 @@ void mtsMaxonEPOS::Run()
 void mtsMaxonEPOS::Close()
 {
     // 1) Close sub device first
-    for (size_t i = 0; i < mRobots.size(); ++i) {
-        for (size_t axis = 1; axis < mRobots[i].mHandles.size(); ++axis) {
-            if (mRobots[i].mHandles[axis]) {
-                if (!VCS_CloseSubDevice(mRobots[i].mHandles[axis], &mRobots[i].mErrorCode) || mRobots[i].mErrorCode != 0) {
-                    CMN_LOG_CLASS_RUN_ERROR 
-                      << mRobots[i].name 
-                      << "[axis " << axis 
-                      << "] CloseSubDevice failed (errorCode=" << mRobots[i].mErrorCode << ")\n";
-                }
-                mRobots[i].mHandles[axis] = nullptr;
+    for (size_t axis = 1; axis < mRobot.mHandles.size(); ++axis) {
+        if (mRobot.mHandles[axis]) {
+            if (!VCS_CloseSubDevice(mRobot.mHandles[axis], &mRobot.mErrorCode) || mRobot.mErrorCode != 0) {
+                CMN_LOG_CLASS_RUN_ERROR 
+                    << mRobot.name 
+                    << "[axis " << axis 
+                    << "] CloseSubDevice failed (errorCode=" << mRobot.mErrorCode << ")\n";
             }
+            mRobot.mHandles[axis] = nullptr;
         }
-        if (!VCS_CloseDevice(mRobots[i].mHandles[0], &mRobots[i].mErrorCode) || mRobots[i].mErrorCode != 0) {
-            CMN_LOG_CLASS_RUN_ERROR 
-              << mRobots[0].name 
-              << "[gateway] CloseDevice failed (errorCode=" << mRobots[i].mErrorCode << ")\n";
+    }
+    if (!VCS_CloseDevice(mRobot.mHandles[0], &mRobot.mErrorCode) || mRobot.mErrorCode != 0) {
+        CMN_LOG_CLASS_RUN_ERROR 
+            << mRobot.name 
+            << "[gateway] CloseDevice failed (errorCode=" << mRobot.mErrorCode << ")\n";
+    }
+    mRobot.mHandles[0] = nullptr;
+}
+
+void mtsMaxonEPOS::RobotData::state_command(const std::string &command)
+{
+    std::string humanReadableMessage;
+    prmOperatingState::StateType newOperatingState;
+    try {
+        if (m_op_state.ValidCommand(prmOperatingState::CommandTypeFromString(command),
+                                    newOperatingState, humanReadableMessage)) {
+            if (command == "enable") {
+                EnableMotorPower();
+                return;
+            }
+            if (command == "disable") {
+                DisableMotorPower();
+                return;
+            }
+            if (command == "home") {
+                // vctBoolVec homingMask(mNumAxes, true);
+                // Home(homingMask);
+                return;
+            }
+            if (command == "unhome") {
+                // vctBoolVec homingMask(mNumAxes, true);
+                // UnHome(homingMask);
+                return;
+            }
+            if (command == "pause") {
+                if (m_op_state.State() == prmOperatingState::ENABLED)
+                    hold();   // Stop motion
+                m_op_state.SetState(newOperatingState);
+                return;
+            }
+            if (command == "resume") {
+                m_op_state.SetState(newOperatingState);
+                return;
+            }
+        } else {
+            mInterface->SendWarning(name + ": " + humanReadableMessage);
         }
-        mRobots[0].mHandles[0] = nullptr;
+    } catch (std::runtime_error &e) {
+        mInterface->SendWarning(name + ": " + command + " doesn't seem to be a valid state_command (" + e.what() + ")");
     }
 }
 
@@ -336,7 +379,6 @@ void mtsMaxonEPOS::RobotData::EnableMotorPower(void)
             }
         }
 
-        mActuatorState.MotorOff().SetAll(false);
     }
     catch (const std::runtime_error & e) {
         mInterface->SendError(name + ": EnableMotorPower (" + e.what() + ")");
@@ -351,7 +393,6 @@ void mtsMaxonEPOS::RobotData::DisableMotorPower(void)
     mErrorCode = 0;
     try {
         for (size_t axis = 0; axis < mNumAxes; ++axis) {
-
             // Find enable state
             if (!VCS_GetEnableState(mHandles[axis], mAxisToNodeIDMap[axis], &mMotorPowerOn, &mErrorCode)) {
                 throw std::runtime_error(
@@ -370,7 +411,7 @@ void mtsMaxonEPOS::RobotData::DisableMotorPower(void)
             }
         }
 
-        mActuatorState.MotorOff().SetAll(true);
+        // mActuatorState.MotorOff().SetAll(true);
     }
     catch (const std::runtime_error & e) {
         mInterface->SendError(name + ": DisableMotorPower (" + e.what() + ")");
@@ -382,14 +423,12 @@ void mtsMaxonEPOS::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
 {
     if (!mParent) {return;}
 
-    mErrorCode = 0;
+    if (!CheckStateEnabled("servo_jv"))
+        return;
 
+    mErrorCode = 0;
     try {
         for (size_t axis = 0; axis < mNumAxes; ++axis) {
-            if (mActuatorState.MotorOff()[axis]) {
-                continue;
-            }
-
             // 2.1) Active Velocity Mode.
             if (mState[axis] != ST_VM) {
                 // Check if hold(); is needed here.
@@ -411,6 +450,8 @@ void mtsMaxonEPOS::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
                     std::to_string(mErrorCode) + ")"
                 );
             }
+
+            m_setpoint_js.Position()[axis] = 0.0;
         }
 
     }
@@ -423,15 +464,15 @@ void mtsMaxonEPOS::RobotData::servo_jv(const prmVelocityJointSet & jtvel)
 void mtsMaxonEPOS::RobotData::servo_jp(const prmPositionJointSet & jtpos)
 {
     if (!mParent) {return;}
+
+    if (!CheckStateEnabled("servo_jp"))
+        return;
+
     mErrorCode = 0;
 
     try {
         // Iterate through each axis，Position mode direct control.
         for (size_t axis = 0; axis < mNumAxes; ++axis) {
-            if (mActuatorState.MotorOff()[axis]) {
-                continue;
-            }
-
             // 2.1 Position Mode（CSP）
             if(mState[axis] != ST_PM){
                 // Check if hold(); is needed here.
@@ -451,6 +492,8 @@ void mtsMaxonEPOS::RobotData::servo_jp(const prmPositionJointSet & jtpos)
                     " (err=" + std::to_string(mErrorCode) + ")"
                 );
             }
+
+            m_setpoint_js.Position()[axis] = jtpos.Goal()[axis];
         }
 
     }
@@ -463,6 +506,9 @@ void mtsMaxonEPOS::RobotData::servo_jp(const prmPositionJointSet & jtpos)
 void mtsMaxonEPOS::RobotData::move_jp(const prmPositionJointSet & jtpos)
 {
     if (!mParent) {return;}
+
+    if (!CheckStateEnabled("move_jp"))
+        return;
 
     mErrorCode = 0;
     try {
@@ -497,6 +543,8 @@ void mtsMaxonEPOS::RobotData::move_jp(const prmPositionJointSet & jtpos)
                     std::to_string(mErrorCode) + ")"
                 );
             }
+
+            m_setpoint_js.Position()[axis] = jtpos.Goal()[axis];
         }
     }
     catch (const std::runtime_error & e) {
@@ -508,6 +556,9 @@ void mtsMaxonEPOS::RobotData::move_jp(const prmPositionJointSet & jtpos)
 void mtsMaxonEPOS::RobotData::hold(void)
 {
     if (!mParent) {return;}
+
+    if (!CheckStateEnabled("hold"))
+        return;
 
     // Return if all stop
     if (!mActuatorState.InMotion().Any()) {
@@ -547,9 +598,7 @@ void mtsMaxonEPOS::RobotData::hold(void)
                 break;
         }
     }
-    // osaSleep(0.05);
     // Clear moving flag.
-    mActuatorState.InMotion().SetAll(false);
 }
 
 void mtsMaxonEPOS::RobotData::SetPositionProfile(
@@ -557,14 +606,11 @@ void mtsMaxonEPOS::RobotData::SetPositionProfile(
     const vctDoubleVec & profileAcceleration,
     const vctDoubleVec & profileDeceleration)
 {
-    // 1) 参数检查
     if (!mParent) {return;}
 
     mErrorCode = 0;
     try {
-        // 2) 对每根轴调用 VCS_SetPositionProfile
         for (size_t axis = 0; axis < mNumAxes; ++axis) {
-            // 跳过已断电的轴
             if (mActuatorState.MotorOff()[axis]) {
                 continue;
             }
@@ -581,4 +627,19 @@ void mtsMaxonEPOS::RobotData::SetPositionProfile(
     catch (const std::runtime_error & e) {
         mInterface->SendError(name + ": SetPositionProfile (" + e.what() + ")");
     }
+}
+
+bool mtsMaxonEPOS::RobotData::CheckStateEnabled(const char *cmdName) const
+{
+    if (m_op_state.State() != prmOperatingState::ENABLED) {
+        try {
+            mInterface->SendWarning(name + ": " + cmdName + ": robot not enabled, current state is "
+                                    + prmOperatingState::StateTypeToString(m_op_state.State()));
+        }
+        catch (const std::runtime_error &e) {
+            mInterface->SendError(name + ": " + cmdName + ": robot not enabled, " + e.what());
+        }
+        return false;
+    }
+    return true;
 }

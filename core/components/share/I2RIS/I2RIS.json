@@ -2,25 +2,21 @@
 // position_bits_to_SI.offset is the offset, in bits
 {
     "file_version": 1,
-    "robots": [
+    "name": "I2RIS",
+    "device_name":"EPOS2",
+    "protocol_stack_name":"MAXON SERIAL V2",
+    "interface_name":"USB",
+    "port_name":"USB0",
+    "timeout":1000,
+    "axes": [
     {
-        "name": "I2RIS",
-        "device_name":"EPOS2",
-        "protocol_stack_name":"MAXON SERIAL V2",
-        "interface_name":"USB",
-        "port_name":"USB0",
-        "timeout":1000,
-        "axes": [
-        {
-            "nodeid": 0 
-        },
-        {
-            "nodeid": 1
-        },
-        {
-            "nodeid": 2
-        }
-        ]
+        "nodeid": 0 
+    },
+    {
+        "nodeid": 1
+    },
+    {
+        "nodeid": 2
     }
     ]
 }
